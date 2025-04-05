@@ -1,0 +1,1 @@
+export const CityDomainGeneralSuccessStatusCode = "0000"

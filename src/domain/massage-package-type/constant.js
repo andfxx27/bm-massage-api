@@ -1,0 +1,1 @@
+export const MassagePackageTypeDomainGeneralSuccessStatusCode = "0000"
