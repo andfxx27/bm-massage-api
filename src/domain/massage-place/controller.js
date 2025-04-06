@@ -8,7 +8,11 @@ import {
     MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists,
     MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass,
     MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation,
+    MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedGetMassagePlacesErrInvalidCityIdsQueryParam,
+    MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue,
+    MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound,
+    MassagePlaceDomainFailedUpdateMassagePlaceByIdErrReqBodyValidation,
     MassagePlaceDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-place/constant.js"
 
@@ -247,6 +251,7 @@ export async function getMassagePlaces(req, res, next) {
                             mmp.max_capacity,
                             mmpa.admin_count::int,
                             mmp.address,
+                            mmp.updated_at,
                             mmp.created_at
                         FROM (SELECT * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp JOIN (
                             SELECT COUNT(admin_user_id) AS admin_count, massage_place_id FROM ms_massage_place_admin GROUP BY massage_place_id
@@ -255,6 +260,8 @@ export async function getMassagePlaces(req, res, next) {
                     `
                     break
                 case UserDomainRoleMember:
+                    // TODO Calculate current capacity calculation after implementing massage order feature
+
                     query = `
                         SELECT
                             mmp.id,
@@ -263,6 +270,7 @@ export async function getMassagePlaces(req, res, next) {
                             mmp.max_capacity,
                             mc."name" AS city_name,
                             mmp.address,
+                            mmp.updated_at,
                             mmp.created_at
                         FROM (select * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp JOIN ms_city mc ON mmp.city_id = mc.id
                         WHERE mmp.city_id::text LIKE ANY($<cityIds>)
@@ -270,11 +278,11 @@ export async function getMassagePlaces(req, res, next) {
                     break
             }
 
-            const massagePlaces = await t.any(query, {
+            const massagePlaces = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(query, {
                 limit: limit,
                 offset: (page - 1) * limit,
                 cityIds: cityIds
-            })
+            }))
 
             return {
                 massagePlaces: massagePlaces,
@@ -311,7 +319,101 @@ export async function getMassagePlaceById(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve path params.
+        const id = req.params.id
+
+        // Main get massage place by id flow.
+        const result = await db.tx(async t => {
+            const role = req.decodedPayload.role
+
+            let massagePlaceHeaderQuery = ""
+            let massagePlaceDetailQuery = ""
+
+            switch (role) {
+                case UserDomainRoleOwner:
+                    massagePlaceHeaderQuery = `
+                        SELECT
+                            mmp.id,
+                            mmp.name,
+                            mmp.max_capacity,
+                            mmpa.admin_count::int,
+                            mmp.address,
+                            mmp.updated_at,
+                            mmp.created_at
+                        FROM ms_massage_place mmp JOIN (
+                            SELECT COUNT(admin_user_id) AS admin_count, massage_place_id FROM ms_massage_place_admin GROUP BY massage_place_id
+                        ) mmpa ON mmpa.massage_place_id  = mmp.id
+                        WHERE mmp.id = $<id>
+                    `
+
+                    massagePlaceDetailQuery = `
+                        SELECT
+                            mu.id,
+                            mu.fullname,
+                            mu.username,
+                            mu.is_active,
+                            mu.created_at
+                        FROM ms_user mu JOIN ms_massage_place_admin mmpa ON mmpa.admin_user_id = mu.id
+                        WHERE mmpa.massage_place_id = $<id>
+                    `
+                    break
+                case UserDomainRoleMember:
+                    massagePlaceHeaderQuery = `
+                        SELECT
+                            mmp.id,
+                            mmp.name,
+                            0 AS current_capacity,
+                            mmp.max_capacity,
+                            mc."name" AS city_name,
+                            mmp.address,
+                            mmp.updated_at,
+                            mmp.created_at
+                        FROM ms_massage_place mmp JOIN ms_city mc ON mmp.city_id = mc.id
+                        WHERE mmp.id = $<id>
+                    `
+
+                    massagePlaceDetailQuery = `
+                        SELECT
+                            *
+                        FROM ms_massage_package
+                        WHERE massage_place_id = $<id>
+                    `
+                    break
+            }
+
+            // Check if the provided massage place id is valid.
+            const massagePlaceHeader = await t.oneOrNone(massagePlaceHeaderQuery, { id: id })
+            if (massagePlaceHeader == null) {
+                winstonLogger.info(baseMessage + " Get massage place by id flow failed because massage place with provided id doesn't exists.")
+
+                response.message = "Failed get massage place by id."
+
+                return {
+                    massagePlace: null,
+                    statusCode: MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound
+                }
+            }
+
+            const convertedMassagePlaceHeader = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlaceHeader)
+            const massagePlaceDetail = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(massagePlaceDetailQuery, { id: id }))
+
+            return {
+                massagePlace: {
+                    ...convertedMassagePlaceHeader,
+                    massagePlaceDetail: massagePlaceDetail
+                },
+                statusCode: MassagePlaceDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.massagePlace = result.massagePlace
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**
@@ -334,7 +436,97 @@ export async function updateMassagePlaceById(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Validate request body.
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            winstonLogger.info(baseMessage + " Update massage place by id flow failed because an error occurred during request body validation.")
+
+            response.message = "Failed update massage place by id."
+            response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceByIdErrReqBodyValidation
+            response.result = {
+                errors: Array.from(new Set(errors.array().map(e => e.msg)))
+            }
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
+
+        // Retrieve path params.
+        const id = req.params.id
+
+        // Main update massage place by id flow.
+        const result = await db.tx(async t => {
+            // Check if the provided massage place id is valid.
+            const massagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE id = $<id>", { id: id })
+            if (massagePlace == null) {
+                winstonLogger.info(baseMessage + " Update massage place by id flow failed because massage place with provided id doesn't exists.")
+
+                response.message = "Failed update massage place by id."
+
+                return {
+                    updatedMassagePlace: null,
+                    statusCode: MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound
+                }
+            }
+
+            const convertedMassagePlace = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlace)
+
+            // Check if updated max capacity is fewer than current max capacity.
+            if (convertedMassagePlace.maxCapacity < req.body.maxCapacity) {
+                winstonLogger.info(baseMessage + " Update massage place by id flow failed because the updated max capacity is fewer than current max capacity.")
+
+                response.message = "Failed update massage place by id."
+
+                return {
+                    updatedMassagePlace: null,
+                    statusCode: MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue
+                }
+            }
+
+            // Check whether the new name and address is not conflicting with another place with different id.
+            const existingMassagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE name = $<name> and address = $<address>", { name: req.body.name, address: req.body.address })
+            if (existingMassagePlace != null && existingMassagePlace.id !== id) {
+                winstonLogger.info(baseMessage + " Update massage place by id flow failed because the name and address conflicts with other massage place with id = " + existingMassagePlace.id)
+
+                response.message = "Failed update massage place by id."
+
+                return {
+                    updatedMassagePlace: null,
+                    statusCode: MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAndAddress
+                }
+            }
+
+            // Update the massage place record.
+            const updatedMassagePlace = await t.one(`
+                UPDATE ms_massage_place
+                SET 
+                    name = $<name>,
+                    max_capacity = $<maxCapacity>,
+                    address = $<address>,
+                    updated_at = $<updatedAt>
+                WHERE id = $<id>
+                RETURNING *
+            `, {
+                id: id,
+                name: req.body.name,
+                maxCapacity: req.body.maxCapacity,
+                address: req.body.address,
+                updatedAt: new Date()
+            })
+
+            return {
+                updatedMassagePlace: updatedMassagePlace,
+                statusCode: MassagePlaceDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.updatedMassagePlace = result.updatedMassagePlace
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**

@@ -62,8 +62,8 @@ Notes: some role can have similar functions (such as view cities) but could have
 - [x] Get cities endpoint
 - [x] Create massage place endpoint
 - [x] View massage places endpoint
-- [ ] View massage place detail endpoint
-- [ ] Update massage place endpoint
+- [x] View massage place detail endpoint
+- [x] Update massage place endpoint
 - [ ] Update massage place admins endpoint
 - [ ] Create massage order endpoint
 - [ ] View ongoing massage orders endpoint
