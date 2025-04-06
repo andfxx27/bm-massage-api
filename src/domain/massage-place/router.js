@@ -51,4 +51,9 @@ router.patch(
     isRoleMiddleware([UserDomainRoleOwner]),
     updateMassagePlaceById
 )
-router.patch("/:id/admins", updateMassagePlaceAdminsById)
+router.patch(
+    "/:id/admins",
+    body("admins", `Field "admins" must be a valid array of object consisting of id, fullname, username, and isActive.`).notEmpty().isArray({ min: 1, max: 10 }),
+    isRoleMiddleware([UserDomainRoleOwner]),
+    updateMassagePlaceAdminsById
+)

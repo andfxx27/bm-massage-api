@@ -10,6 +10,9 @@ import {
     MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation,
     MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedGetMassagePlacesErrInvalidCityIdsQueryParam,
+    MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray,
+    MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass,
+    MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrReqBodyValidation,
@@ -28,7 +31,8 @@ import {
     pgp,
     TblMassagePlaceAdminColumnSet,
     TblMassagePlaceColumnSet,
-    TblUserColumnSet
+    TblUserColumnSet,
+    TblUserUpdateColumnSet
 } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
@@ -549,5 +553,118 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Validate request body.
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because an error occurred during request body validation.")
+
+            response.message = "Failed update massage place admins by id."
+            response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation
+            response.result = {
+                errors: Array.from(new Set(errors.array().map(e => e.msg)))
+            }
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
+
+        // Retrieve path params.
+        const id = req.params.id
+
+        // Main update massage place admins flow.
+        const result = await db.tx(async t => {
+            // Make sure that default admin password exists in the .env.
+            const defaultAdminPassword = process.env.MASSAGE_PLACE_ADMIN_DEFAULT_PASS
+            if (!defaultAdminPassword) {
+                winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because default admin pass is not found.")
+
+                response.message = "Failed update massage place admins by id."
+
+                return {
+                    updatedMassagePlace: null,
+                    statusCode: MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass
+                }
+            }
+
+            // Hash default admin password.
+            const hashedDefaultAdminPassword = await bcrypt.hash(defaultAdminPassword, 10)
+
+            // Validate admins array from the request body.
+            let validAdmins = true
+            req.body.admins.forEach((admin) => {
+                const { id, fullname, username, isActive } = admin
+                if (!fullname || !username || !isActive) {
+                    validAdmins = false
+                }
+            })
+
+            if (!validAdmins) {
+                winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because of invalid admins object array.")
+
+                response.message = "Failed update massage place admins by id."
+
+                return {
+                    updatedMassagePlace: null,
+                    statusCode: MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray
+                }
+            }
+
+            // Split admin record with empty and non-empty id.
+            const existingAdmins = req.body.admins.filter((admin) => admin.id)
+            const newAdmins = req.body.admins.filter((admin) => !admin.id).map((admin) => {
+                const mappedAdmin = { ...admin }
+                delete (mappedAdmin.id)
+                mappedAdmin.gender = UserDomainGenderMale
+                mappedAdmin.email = `${mappedAdmin.username}@gmail.com`
+                mappedAdmin.password = hashedDefaultAdminPassword
+                mappedAdmin.role = UserDomainRoleAdmin
+                return mappedAdmin
+            })
+
+            // Update existing admin user information.
+            const { update } = pgp.helpers
+            const updateExistingAdminsQuery = update(existingAdmins, TblUserUpdateColumnSet) + " WHERE v.id::uuid = t.id RETURNING *"
+            const updatedExistingAdmins = await t.any(updateExistingAdminsQuery)
+
+            // Create new user and massage place admin record for the remaining new admins.
+            const { insert } = pgp.helpers
+            const tempColumnSet = new pgp.helpers.ColumnSet([
+                { name: "fullname", prop: "fullname" },
+                { name: "gender", prop: "gender" },
+                { name: "username", prop: "username" },
+                { name: "email", prop: "email" },
+                { name: "password", prop: "password" },
+                { name: "role", prop: "role" },
+                { name: "is_active", prop: "isActive" }
+            ], {
+                table: "ms_user"
+            })
+            const createNewAdminUserRecordQuery = insert(newAdmins, tempColumnSet) + " RETURNING *"
+            const createdNewAdminUsers = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(createNewAdminUserRecordQuery))
+
+            const newMassagePlaceAdmins = createdNewAdminUsers.map((user) => {
+                return {
+                    massagePlaceId: id,
+                    adminUserId: user.id
+                }
+            })
+
+            const createMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminColumnSet)
+            await t.none(createMassagePlaceAdminsRecordQuery)
+
+            return {
+                updatedMassagePlace: {
+                    updatedMassagePlaceAdmins: [...updatedExistingAdmins, ...createdNewAdminUsers]
+                },
+                statusCode: MassagePlaceDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.updatedMassagePlace = result.updatedMassagePlace
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }

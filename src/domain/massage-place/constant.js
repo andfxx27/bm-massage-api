@@ -10,3 +10,6 @@ export const MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound 
 export const MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound = "1013"
 export const MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue = "1014"
 export const MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAndAddress = "1015"
+export const MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation = "1016"
+export const MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray = "1017"
+export const MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass = "1018"

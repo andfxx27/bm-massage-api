@@ -34,6 +34,15 @@ export const TblUserColumnSet = new ColumnSet([
     table: "ms_user"
 })
 
+export const TblUserUpdateColumnSet = new ColumnSet([
+    { name: "id", cnd: true },
+    { name: "fullname", prop: "fullname" },
+    { name: "username", prop: "username" },
+    { name: "is_active", prop: "isActive" }
+], {
+    table: "ms_user"
+})
+
 const dbUser = process.env.DATABASE_USER
 const dbPass = process.env.DATABASE_PASS
 const dbHost = process.env.DATABASE_HOST
