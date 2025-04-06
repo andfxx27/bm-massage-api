@@ -1,3 +1,6 @@
+export const UserDomainGenderMale = "MALE"
+export const UserDomainGenderFemale = "FEMALE"
+
 export const UserDomainRoleOwner = "OWNER"
 export const UserDomainRoleAdmin = "ADMIN"
 export const UserDomainRoleMember = "MEMBER"

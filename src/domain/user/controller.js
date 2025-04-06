@@ -131,6 +131,8 @@ export async function signIn(req, res, next) {
             if (users.length === 0) {
                 winstonLogger.info(`${baseMessage} Sign in flow failed because no user record with specified credentials is found.`)
 
+                response.message = "Failed sign in."
+
                 return {
                     accessToken: null,
                     statusCode: UserDomainFailedSignInErrNoUserFound
@@ -143,6 +145,8 @@ export async function signIn(req, res, next) {
             const validPassword = await bcrypt.compare(req.body.password, user.password)
             if (!validPassword) {
                 winstonLogger.info(`${baseMessage} Sign in flow failed because of failed password comparison.`)
+
+                response.message = "Failed sign in."
 
                 return {
                     accessToken: null,
@@ -209,7 +213,7 @@ export async function approveMemberBanRequest(req, res, next) {
         message: "Success update member ban approval request.",
         statusCode: UserDomainGeneralSuccessStatusCode,
         result: {
-            updatedMemberBanApproval: null
+            updatedMemberBanRequest: null
         }
     }
 

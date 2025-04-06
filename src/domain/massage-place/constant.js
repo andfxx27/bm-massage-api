@@ -1,1 +1,6 @@
 export const MassagePlaceDomainGeneralSuccessStatusCode = "0000"
+
+export const MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation = "1006"
+export const MassagePlaceDomainFailedCreateMassagePlaceErrDuplicateAdminNames = "1007"
+export const MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass = "1008"
+export const MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists = "1009"

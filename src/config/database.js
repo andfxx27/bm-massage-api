@@ -6,6 +6,23 @@ export const pgp = pgPromise(initOptions)
 
 const { ColumnSet } = pgp.helpers
 
+export const TblMassagePlaceColumnSet = new ColumnSet([
+    { name: "name", prop: "name" },
+    { name: "max_capacity", prop: "maxCapacity" },
+    { name: "address", prop: "address" },
+    { name: "owner_user_id", prop: "ownerUserId" },
+    { name: "city_id", prop: "cityId" }
+], {
+    table: "ms_massage_place"
+})
+
+export const TblMassagePlaceAdminColumnSet = new ColumnSet([
+    { name: "admin_user_id", prop: "adminUserId" },
+    { name: "massage_place_id", prop: "massagePlaceId" }
+], {
+    table: "ms_massage_place_admin"
+})
+
 export const TblUserColumnSet = new ColumnSet([
     { name: "fullname", prop: "fullname" },
     { name: "gender", prop: "gender" },
