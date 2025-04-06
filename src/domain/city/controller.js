@@ -29,10 +29,10 @@ export async function getCities(req, res, next) {
 
     try {
         // Retrieve query params.
-        const page = req.query.page ?? 1
-        const limit = req.query.limit ?? 15
+        const page = +req.query.page ?? 1
+        const limit = +req.query.limit ?? 15
 
-        // Get cities flow.
+        // Main get cities flow.
         const result = await db.tx(async t => {
             return await t.many("SELECT * FROM ms_city LIMIT $<limit> OFFSET $<offset>", { limit: limit, offset: (page - 1) * limit })
         })

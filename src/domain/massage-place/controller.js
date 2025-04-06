@@ -8,12 +8,15 @@ import {
     MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists,
     MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass,
     MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation,
+    MassagePlaceDomainFailedGetMassagePlacesErrInvalidCityIdsQueryParam,
     MassagePlaceDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-place/constant.js"
 
 import {
     UserDomainGenderMale,
-    UserDomainRoleAdmin
+    UserDomainRoleAdmin,
+    UserDomainRoleMember,
+    UserDomainRoleOwner
 } from "#root/src/domain/user/constant.js"
 
 import {
@@ -25,7 +28,10 @@ import {
 } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
-import { arrayObjectSnakeCaseToCamelCasePropsConverter, singleObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
+import {
+    arrayObjectSnakeCaseToCamelCasePropsConverter,
+    singleObjectSnakeCaseToCamelCasePropsConverter
+} from "#root/src/utils/string.js"
 
 /**
  * Function to create massage place record.
@@ -213,7 +219,76 @@ export async function getMassagePlaces(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve query params.
+        const page = +req.query.page ?? 1
+        const limit = +req.query.limit ?? 15
+
+        const cityIds = req.query.cityIds.split(",")
+        if (req.query.cityIds && req.query.cityIds.split(",").length === 0) {
+            response.message = "Failed get massage places."
+            response.statusCode = MassagePlaceDomainFailedGetMassagePlacesErrInvalidCityIdsQueryParam
+
+            return res.status(httpStatusCodes.OK).json(response)
+        }
+
+        // Main get massage places flow.
+        const result = await db.tx(async t => {
+            const role = req.decodedPayload.role
+
+            let query = ""
+
+            switch (role) {
+                case UserDomainRoleOwner:
+                    query = `
+                        SELECT
+                            mmp.id,
+                            mmp.name,
+                            mmp.max_capacity,
+                            mmpa.admin_count::int,
+                            mmp.address,
+                            mmp.created_at
+                        FROM (SELECT * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp JOIN (
+                            SELECT COUNT(admin_user_id) AS admin_count, massage_place_id FROM ms_massage_place_admin GROUP BY massage_place_id
+                        ) mmpa ON mmpa.massage_place_id  = mmp.id
+                        WHERE mmp.city_id::text LIKE ANY($<cityIds>)
+                    `
+                    break
+                case UserDomainRoleMember:
+                    query = `
+                        SELECT
+                            mmp.id,
+                            mmp.name,
+                            0 AS current_capacity,
+                            mmp.max_capacity,
+                            mc."name" AS city_name,
+                            mmp.address,
+                            mmp.created_at
+                        FROM (select * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp JOIN ms_city mc ON mmp.city_id = mc.id
+                        WHERE mmp.city_id::text LIKE ANY($<cityIds>)
+                    `
+                    break
+            }
+
+            const massagePlaces = await t.any(query, {
+                limit: limit,
+                offset: (page - 1) * limit,
+                cityIds: cityIds
+            })
+
+            return {
+                massagePlaces: massagePlaces,
+                statusCode: MassagePlaceDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.massagePlaces = result.massagePlaces
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**
