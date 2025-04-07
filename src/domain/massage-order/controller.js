@@ -334,7 +334,49 @@ export async function getMassageOrdersLogHistory(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve query params.
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
+
+        // Main get massage orders log history flow.
+        const result = await db.tx(async t => {
+            const massageOrdersLogHistory = await t.any(`
+                SELECT
+                    mmo.id AS massage_order_id,
+                    mu.email AS member_email,
+                    mu.username AS member_username,
+                    mu.gender AS member_gender,
+                    mmpt."name" AS massage_package_type_name,
+                    mmpkg."name" AS massage_package_name,
+                    mmpkg.price AS massage_package_price,
+                    mmo.order_status AS massage_order_status,
+                    mmo.created_at + interval '2 hour' AS massage_order_expired_at,
+                    mmo.created_at AS massage_order_created_at
+                FROM
+                    ms_massage_order mmo
+                        JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                        JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
+                        JOIN ms_user mu ON mu.id = mmo.member_user_id
+                LIMIT $<limit> OFFSET $<offset>
+            `, {
+                limit: limit,
+                offset: (page - 1) * limit
+            })
+
+            return {
+                massageOrdersLogHistory: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrdersLogHistory),
+                statusCode: MassageOrderDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.massageOrdersLogHistory = result.massageOrdersLogHistory
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**

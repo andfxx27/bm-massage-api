@@ -32,6 +32,10 @@ router.get(
     isRoleMiddleware([UserDomainRoleAdmin]),
     getOngoingMassageOrderById
 )
-router.get("/log-history", getMassageOrdersLogHistory)
+router.get(
+    "/log-history",
+    isRoleMiddleware([UserDomainRoleAdmin]),
+    getMassageOrdersLogHistory
+)
 router.get("/profit-report", getMassageOrderProfitReport)
 router.get("/member-count", getMemberOrdersCountAndBanStatus)
