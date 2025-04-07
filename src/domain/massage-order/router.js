@@ -38,4 +38,8 @@ router.get(
     getMassageOrdersLogHistory
 )
 router.get("/profit-report", getMassageOrderProfitReport)
-router.get("/member-count", getMemberOrdersCountAndBanStatus)
+router.get(
+    "/member-count",
+    isRoleMiddleware([UserDomainRoleAdmin]),
+    getMemberOrdersCountAndBanStatus
+)

@@ -1,5 +1,5 @@
 import express from "express"
-import { body, oneOf } from "express-validator"
+import { body } from "express-validator"
 
 import {
     signUp,
@@ -7,6 +7,14 @@ import {
     requestMemberBanApproval,
     approveMemberBanRequest
 } from "#root/src/domain/user/controller.js"
+import {
+    UserDomainRoleAdmin
+} from "#root/src/domain/user/constant.js"
+
+import {
+    isAuthorizedMiddleware,
+    isRoleMiddleware
+} from "#root/src/middleware/auth.js"
 
 export const router = express.Router()
 
@@ -20,5 +28,12 @@ router.post(
     signUp
 )
 router.post("/sign-in", signIn)
-router.post("/member-ban", requestMemberBanApproval)
+router.post(
+    "/member-ban",
+    body("memberUserId", `Field "memberUserId" must be a valid uuid value.`).notEmpty().isUUID("4"),
+    body("banReason", `Field "banReason" must be a valid alphabetical value.`).notEmpty().isAlpha("en-US", { ignore: [" "] }),
+    isAuthorizedMiddleware,
+    isRoleMiddleware([UserDomainRoleAdmin]),
+    requestMemberBanApproval
+)
 router.patch("/member-ban", approveMemberBanRequest)
