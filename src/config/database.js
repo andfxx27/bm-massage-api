@@ -6,6 +6,13 @@ export const pgp = pgPromise(initOptions)
 
 const { ColumnSet } = pgp.helpers
 
+export const TblMassageOrderColumnSet = new ColumnSet([
+    { name: "member_user_id", prop: "memberUserId" },
+    { name: "massage_package_id", prop: "massagePackageId" }
+], {
+    table: "ms_massage_order"
+})
+
 export const TblMassagePlaceColumnSet = new ColumnSet([
     { name: "name", prop: "name" },
     { name: "max_capacity", prop: "maxCapacity" },
@@ -38,7 +45,8 @@ export const TblUserUpdateColumnSet = new ColumnSet([
     { name: "id", cnd: true },
     { name: "fullname", prop: "fullname" },
     { name: "username", prop: "username" },
-    { name: "is_active", prop: "isActive" }
+    { name: "is_active", prop: "isActive" },
+    { name: "updated_at", cast: "timestamp", prop: "updatedAt" }
 ], {
     table: "ms_user"
 })

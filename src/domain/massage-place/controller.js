@@ -610,7 +610,11 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
             }
 
             // Split admin record with empty and non-empty id.
-            const existingAdmins = req.body.admins.filter((admin) => admin.id)
+            const existingAdmins = req.body.admins.filter((admin) => admin.id).map((admin) => {
+                const mappedAdmin = { ...admin }
+                mappedAdmin.updatedAt = new Date()
+                return mappedAdmin
+            })
             const newAdmins = req.body.admins.filter((admin) => !admin.id).map((admin) => {
                 const mappedAdmin = { ...admin }
                 delete (mappedAdmin.id)
@@ -621,40 +625,48 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
                 return mappedAdmin
             })
 
+            const updatedMassagePlaceAdmins = []
+
             // Update existing admin user information.
             const { update } = pgp.helpers
             const updateExistingAdminsQuery = update(existingAdmins, TblUserUpdateColumnSet) + " WHERE v.id::uuid = t.id RETURNING *"
             const updatedExistingAdmins = await t.any(updateExistingAdminsQuery)
 
+            updatedMassagePlaceAdmins.push(...updatedExistingAdmins)
+
             // Create new user and massage place admin record for the remaining new admins.
-            const { insert } = pgp.helpers
-            const tempColumnSet = new pgp.helpers.ColumnSet([
-                { name: "fullname", prop: "fullname" },
-                { name: "gender", prop: "gender" },
-                { name: "username", prop: "username" },
-                { name: "email", prop: "email" },
-                { name: "password", prop: "password" },
-                { name: "role", prop: "role" },
-                { name: "is_active", prop: "isActive" }
-            ], {
-                table: "ms_user"
-            })
-            const createNewAdminUserRecordQuery = insert(newAdmins, tempColumnSet) + " RETURNING *"
-            const createdNewAdminUsers = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(createNewAdminUserRecordQuery))
+            if (newAdmins.length > 0) {
+                const { insert } = pgp.helpers
+                const tempColumnSet = new pgp.helpers.ColumnSet([
+                    { name: "fullname", prop: "fullname" },
+                    { name: "gender", prop: "gender" },
+                    { name: "username", prop: "username" },
+                    { name: "email", prop: "email" },
+                    { name: "password", prop: "password" },
+                    { name: "role", prop: "role" },
+                    { name: "is_active", prop: "isActive" }
+                ], {
+                    table: "ms_user"
+                })
+                const createNewAdminUserRecordQuery = insert(newAdmins, tempColumnSet) + " RETURNING *"
+                const createdNewAdminUsers = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(createNewAdminUserRecordQuery))
 
-            const newMassagePlaceAdmins = createdNewAdminUsers.map((user) => {
-                return {
-                    massagePlaceId: id,
-                    adminUserId: user.id
-                }
-            })
+                const newMassagePlaceAdmins = createdNewAdminUsers.map((user) => {
+                    return {
+                        massagePlaceId: id,
+                        adminUserId: user.id
+                    }
+                })
 
-            const createMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminColumnSet)
-            await t.none(createMassagePlaceAdminsRecordQuery)
+                const createMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminColumnSet)
+                await t.none(createMassagePlaceAdminsRecordQuery)
+
+                updatedMassagePlaceAdmins.push(...createdNewAdminUsers)
+            }
 
             return {
                 updatedMassagePlace: {
-                    updatedMassagePlaceAdmins: [...updatedExistingAdmins, ...createdNewAdminUsers]
+                    updatedMassagePlaceAdmins: updatedMassagePlaceAdmins
                 },
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }

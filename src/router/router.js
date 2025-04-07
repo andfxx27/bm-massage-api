@@ -15,7 +15,7 @@ export const router = express.Router()
 router.use(uuidAttacherMiddleware)
 
 router.use("/api/v1/cities", isAuthorizedMiddleware, cityRouter)
-router.use("/api/v1/massage-orders", massageOrderRouter)
+router.use("/api/v1/massage-orders", isAuthorizedMiddleware, massageOrderRouter)
 router.use("/api/v1/massage-package-types", massagePackageTypeRouter)
 router.use("/api/v1/massage-places", isAuthorizedMiddleware, massagePlaceRouter)
 router.use("/api/v1/users", userRouter)

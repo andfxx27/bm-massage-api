@@ -1,1 +1,6 @@
 export const MassageOrderDomainGeneralSuccessStatusCode = "0000"
+
+export const MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation = "1019"
+export const MassageOrderDomainFailedCreateMassageOrderErrMassagePackageNotFound = "1020"
+export const MassageOrderDomainFailedCreateMassageOrderErrExceedsMassagePackageCapacity = "1021"
+export const MassageOrderDomainFailedCreateMassageOrderErrOngoingMassageOrderExists = "1022"
