@@ -422,5 +422,43 @@ export async function getMemberOrdersCountAndBanStatus(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve query params.
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
+
+        // Main get member orders count and ban status flow.
+        const result = await db.tx(async t => {
+            const memberOrdersCountAndBanStatus = await t.any(`
+                SELECT
+                    mu.username AS member_username,
+                    mu.email AS member_email,
+                    count(mmo.order_status) filter(where mmo.order_status = 'EXPIRED')::int AS expired_order_count,
+                    count(mmo.order_status) filter(where mmo.order_status = 'COMPLETED')::int AS completed_order_count,
+                    mu.ban_status AS member_ban_status,
+                    mu.created_at AS member_created_at
+                FROM
+                    ms_user mu
+                        JOIN ms_massage_order mmo on mmo.member_user_id = mu.id
+                GROUP BY member_username, member_email, mmo.order_status, member_ban_status, mu.created_at
+                ORDER BY mu.created_at DESC
+                LIMIT $<limit> OFFSET $<offset>
+            `, {
+                limit: limit,
+                offset: (page - 1) * limit
+            })
+
+            return {
+                memberOrdersCountAndBanStatus: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberOrdersCountAndBanStatus),
+                statusCode: MassageOrderDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.memberOrdersCountAndBanStatus = result.memberOrdersCountAndBanStatus
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
