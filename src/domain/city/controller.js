@@ -29,8 +29,8 @@ export async function getCities(req, res, next) {
 
     try {
         // Retrieve query params.
-        const page = +req.query.page ?? 1
-        const limit = +req.query.limit ?? 15
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
 
         // Main get cities flow.
         const result = await db.tx(async t => {

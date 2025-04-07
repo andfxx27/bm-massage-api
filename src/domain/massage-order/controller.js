@@ -10,12 +10,18 @@ import {
     MassageOrderDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-order/constant.js"
 
+import {
+    UserDomainRoleAdmin,
+    UserDomainRoleMember
+} from "#root/src/domain/user/constant.js"
+
 import { winstonLogger } from "#root/src/config/logger.js"
 import {
     db,
     pgp,
     TblMassageOrderColumnSet
 } from "#root/src/config/database.js"
+
 import { arrayObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
 
 /**
@@ -144,7 +150,82 @@ export async function getOngoingMassageOrders(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve query params.
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
+
+        // Main get ongoing massage orders flow.
+        const result = await db.tx(async t => {
+            let query = ""
+
+            const role = req.decodedPayload.role
+            switch (role) {
+                case UserDomainRoleAdmin:
+                    query = `
+                        SELECT
+                            mmo.id AS massage_order_id,
+                            mmpt."name" AS massage_package_type_name,
+                            mu.username AS member_username,
+                            mmp.price AS massage_package_price,
+                            mmo.order_status AS massage_order_status,
+	                        mmo.created_at + interval '2 hour' AS massage_order_expired_at,
+                            mmo.created_at AS massage_order_created_at
+                        FROM
+                            ms_massage_order mmo 
+                                JOIN ms_user mu ON mu.id = mmo.member_user_id
+                                JOIN ms_massage_package mmp ON mmp.id = mmo.massage_package_id
+                                JOIN ms_massage_package_type mmpt ON mmpt.id = mmp.massage_package_type_id
+                                JOIN ms_massage_place_admin mmpa ON mmpa.massage_place_id = mmp.massage_place_id
+                        WHERE 
+                            mmpa.admin_user_id = $<userId> 
+                            AND
+                            mmo.order_status = 'PENDING'
+                        LIMIT $<limit> OFFSET $<offset>
+                    `
+                    break
+                case UserDomainRoleMember:
+                    query = `
+                        SELECT
+                            mmo.id AS massage_order_id,
+                            mmpkg."name" AS massage_package_name,
+                            mmplc."name" AS massage_place_name,
+                            mc."name" AS massage_place_city_name,
+                            mmo.created_at + interval '2 hour' AS massage_order_expired_at,
+                            mmo.created_at AS massage_order_created_at
+                        FROM 
+                            ms_massage_order mmo
+                                JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                                JOIN ms_massage_place mmplc ON mmplc.id = mmpkg.massage_place_id
+                                JOIN ms_city mc ON mc.id = mmplc.city_id
+                        WHERE 
+                            mmo.member_user_id = $<userId>
+                            AND
+                            mmo.order_status = 'PENDING'
+                        LIMIT $<limit> OFFSET $<offset>
+                    `
+                    break
+            }
+
+            const ongoingMassageOrders = await t.manyOrNone(query, {
+                userId: req.decodedPayload.id,
+                limit: limit,
+                offset: (page - 1) * limit
+            })
+
+            return {
+                ongoingMassageOrders: ongoingMassageOrders,
+                statusCode: MassageOrderDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.ongoingMassageOrders = result.ongoingMassageOrders
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**

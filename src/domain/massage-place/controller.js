@@ -229,8 +229,8 @@ export async function getMassagePlaces(req, res, next) {
 
     try {
         // Retrieve query params.
-        const page = +req.query.page ?? 1
-        const limit = +req.query.limit ?? 15
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
 
         const cityIds = req.query.cityIds.split(",")
         if (req.query.cityIds && req.query.cityIds.split(",").length === 0) {

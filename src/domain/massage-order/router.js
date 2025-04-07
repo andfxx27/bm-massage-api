@@ -10,7 +10,7 @@ import {
     getOngoingMassageOrders
 } from "#root/src/domain/massage-order/controller.js"
 
-import { UserDomainRoleMember } from "#root/src/domain/user/constant.js"
+import { UserDomainRoleAdmin, UserDomainRoleMember } from "#root/src/domain/user/constant.js"
 
 import { isRoleMiddleware } from "#root/src/middleware/auth.js"
 
@@ -22,8 +22,15 @@ router.post(
     isRoleMiddleware([UserDomainRoleMember]),
     createMassageOrder
 )
-router.get("/ongoing", getOngoingMassageOrders)
-router.get("/:id/ongoing", getOngoingMassageOrderById)
+router.get(
+    "/ongoing",
+    isRoleMiddleware([UserDomainRoleAdmin, UserDomainRoleMember]),
+    getOngoingMassageOrders
+)
+router.get(
+    "/:id/ongoing",
+    getOngoingMassageOrderById
+)
 router.get("/log-history", getMassageOrdersLogHistory)
 router.get("/profit-report", getMassageOrderProfitReport)
 router.get("/member-count", getMemberOrdersCountAndBanStatus)
