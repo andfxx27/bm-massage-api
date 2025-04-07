@@ -13,14 +13,28 @@ import {
     UserDomainFailedSignInErrInvalidPassword,
     UserDomainFailedRequestMemberBanApprovalErrReqBodyValidation,
     UserDomainFailedRequestMemberBanApprovalErrUserNotFound,
-    UserDomainFailedRequestMemberBanApprovalErrBanRequestAlreadyExists
+    UserDomainFailedRequestMemberBanApprovalErrBanRequestAlreadyExists,
+    UserDomainFailedApproveMemberBanRequestErrReqBodyValidation,
+    UserDomainBanApprovalStatusBanned,
+    UserDomainBanApprovalStatusRevoked,
+    UserDomainBanApprovalStatusPending,
+    UserDomainBanStatusActive,
+    UserDomainBanStatusBanned
 } from "#root/src/domain/user/constant.js"
 
-import { db, pgp, TblMemberBanColumnSet, TblUserColumnSet } from "#root/src/config/database.js"
+import {
+    db,
+    pgp,
+    TblMemberBanColumnSet,
+    TblUserColumnSet
+} from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
 import { signJwt } from "#root/src/utils/auth.js"
-import { arrayObjectSnakeCaseToCamelCasePropsConverter, singleObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
+import {
+    arrayObjectSnakeCaseToCamelCasePropsConverter,
+    singleObjectSnakeCaseToCamelCasePropsConverter
+} from "#root/src/utils/string.js"
 
 /**
  * Function for signing up as new user.
@@ -235,12 +249,11 @@ export async function requestMemberBanApproval(req, res, next) {
                 const convertedExistingBanRequest = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, existingBanRequest)
 
                 // Check for ban request which already passed its own ban lift time, since we only update it manually.
+                const currentDate = new Date()
+                const currentDateUnix = currentDate.getTime()
                 let liftedBanRequestCount = 0
                 convertedExistingBanRequest.forEach((request) => {
-                    const currentDate = new Date()
-                    const currentDateUnix = currentDate.getTime()
                     const banLiftedDateUnix = request.banLiftedAt.getTime()
-
                     if (banLiftedDateUnix < currentDateUnix) {
                         liftedBanRequestCount++
                     }
@@ -268,11 +281,9 @@ export async function requestMemberBanApproval(req, res, next) {
             const createMemberBanRequestRecordQuery = insert(newMemberBanRequest, TblMemberBanColumnSet) + " RETURNING *"
             const requestedMemberBanApproval = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.one(createMemberBanRequestRecordQuery))
 
-            console.log(req.body)
-
             // Update member ban status on user record.
             await t.none(`UPDATE ms_user SET ban_status = $<banStatus>, updated_at = $<updatedAt> WHERE id = $<memberUserId>`, {
-                banStatus: 'PENDING',
+                banStatus: UserDomainBanApprovalStatusPending,
                 memberUserId: req.body.memberUserId,
                 updatedAt: new Date()
             })
@@ -312,5 +323,101 @@ export async function approveMemberBanRequest(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Validate request body.
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            winstonLogger.info(baseMessage + " Approve member ban approval request flow failed because an error occurred during request body validation.")
+
+            response.message = "Failed update member ban approval request."
+            response.statusCode = UserDomainFailedApproveMemberBanRequestErrReqBodyValidation
+            response.result = {
+                errors: Array.from(new Set(errors.array().map(e => e.msg)))
+            }
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
+
+        // Main approve member ban request flow.
+        const result = await db.tx(async t => {
+            const currentDate = new Date()
+            const banApprovalStatus = req.body.banApprovalStatus
+
+            // Update ban approval status in member ban record.
+            const updatedMemberBanRequest = await t.one(`
+                UPDATE ms_member_ban
+                SET
+                    owner_user_id = $<ownerUserId>,
+                    approval_status = $<banApprovalStatus>,
+                    updated_at = $<updatedAt>
+                WHERE id = $<banRequestId>
+                RETURNING *
+            `, {
+                ownerUserId: req.decodedPayload.id,
+                banApprovalStatus: banApprovalStatus,
+                updatedAt: currentDate,
+                banRequestId: req.body.banRequestId
+            })
+
+            // Ban status in user record will need to be checked/ updated everytime authorization process is done (check whether the member ban is lifted/ not).
+            let banStatus = ""
+            if (banApprovalStatus === UserDomainBanApprovalStatusRevoked) {
+                banStatus = UserDomainBanStatusActive
+            } else if (banApprovalStatus === UserDomainBanApprovalStatusBanned) {
+                banStatus = UserDomainBanStatusBanned
+            }
+
+            // Update ban status in user record.
+            await t.none(`
+                UPDATE ms_user
+                SET
+                    ban_status = $<banStatus>,
+                    updated_at = $<updatedAt>
+                WHERE id = $<memberUserId>
+            `, {
+                banStatus: banStatus,
+                updatedAt: currentDate,
+                memberUserId: req.body.memberUserId
+            })
+
+            return {
+                updatedMemberBanRequest: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMemberBanRequest),
+                statusCode: UserDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.updatedMemberBanRequest = result.updatedMemberBanRequest
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
+}
+
+/**
+ * Function to get member ban approval requests.
+ * @param {express.Request} req Express request instance.
+ * @param {express.Response} res Express response instance.
+ * @param {express.NextFunction} next Express next function handler.
+ */
+export async function getMemberBanApprovalRequests(req, res, next) {
+    const reqIdentifier = req.reqIdentifier
+    const baseMessage = `req-${reqIdentifier} - [ userController.getMemberBanApprovalRequests ] called.`
+
+    winstonLogger.info(baseMessage)
+
+    const response = {
+        message: "Success get member ban approval requests.",
+        statusCode: UserDomainGeneralSuccessStatusCode,
+        result: {
+            memberBanApprovalRequests: null
+        }
+    }
+
+    try {
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }

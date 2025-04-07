@@ -1,3 +1,11 @@
+export const UserDomainBanApprovalStatusPending = "PENDING"
+export const UserDomainBanApprovalStatusBanned = "BANNED"
+export const UserDomainBanApprovalStatusRevoked = "REVOKED"
+
+export const UserDomainBanStatusPending = "PENDING"
+export const UserDomainBanStatusActive = "ACTIVE"
+export const UserDomainBanStatusBanned = "BANNED"
+
 export const UserDomainGenderMale = "MALE"
 export const UserDomainGenderFemale = "FEMALE"
 
@@ -14,3 +22,4 @@ export const UserDomainFailedSignInErrInvalidPassword = "1005"
 export const UserDomainFailedRequestMemberBanApprovalErrReqBodyValidation = "1025"
 export const UserDomainFailedRequestMemberBanApprovalErrUserNotFound = "1026"
 export const UserDomainFailedRequestMemberBanApprovalErrBanRequestAlreadyExists = "1027"
+export const UserDomainFailedApproveMemberBanRequestErrReqBodyValidation = "1028"

@@ -5,10 +5,12 @@ import {
     signUp,
     signIn,
     requestMemberBanApproval,
-    approveMemberBanRequest
+    approveMemberBanRequest,
+    getMemberBanApprovalRequests
 } from "#root/src/domain/user/controller.js"
 import {
-    UserDomainRoleAdmin
+    UserDomainRoleAdmin,
+    UserDomainRoleOwner
 } from "#root/src/domain/user/constant.js"
 
 import {
@@ -36,4 +38,18 @@ router.post(
     isRoleMiddleware([UserDomainRoleAdmin]),
     requestMemberBanApproval
 )
-router.patch("/member-ban", approveMemberBanRequest)
+router.patch(
+    "/member-ban",
+    body("banRequestId", `Field "banRequestId" must be a valid uuid value.`).notEmpty().isUUID("4"),
+    body("memberUserId", `Field "memberUserId" must be a valid uuid value.`).notEmpty().isUUID("4"),
+    body("banApprovalStatus", `Field "banApprovalStatus" must be either "BANNED" or "REVOKED".`).notEmpty().isIn(["BANNED", "REVOKED"]),
+    isAuthorizedMiddleware,
+    isRoleMiddleware([UserDomainRoleOwner]),
+    approveMemberBanRequest
+)
+router.get(
+    "/member-ban",
+    isAuthorizedMiddleware,
+    isRoleMiddleware([UserDomainRoleOwner]),
+    getMemberBanApprovalRequests
+)

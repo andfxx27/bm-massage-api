@@ -71,7 +71,8 @@ Notes: some role can have similar functions (such as view cities) but could have
 - [x] View massage orders log history endpoint
 - [x] View member's completed, expired orders count, and ban status endpoint
 - [x] Request member ban approval endpoint
-- [ ] Approve member ban request endpoint
+- [x] Approve member ban request endpoint
+- [ ] View member ban requests endpoint
 - [ ] View profit reporting endpoint
 - [ ] View massage package types endpoint
 - [ ] Add new massage package at specific massage place endpoint
