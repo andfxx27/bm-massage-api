@@ -4,3 +4,5 @@ export const MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation = "1
 export const MassageOrderDomainFailedCreateMassageOrderErrMassagePackageNotFound = "1020"
 export const MassageOrderDomainFailedCreateMassageOrderErrExceedsMassagePackageCapacity = "1021"
 export const MassageOrderDomainFailedCreateMassageOrderErrOngoingMassageOrderExists = "1022"
+export const MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId = "1023"
+export const MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound = "1024"

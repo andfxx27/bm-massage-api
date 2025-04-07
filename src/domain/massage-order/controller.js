@@ -1,12 +1,15 @@
 import express from "express"
 import { validationResult } from "express-validator"
 import httpStatusCodes from "http-status-codes"
+import { validate } from "uuid"
 
 import {
     MassageOrderDomainFailedCreateMassageOrderErrExceedsMassagePackageCapacity,
     MassageOrderDomainFailedCreateMassageOrderErrMassagePackageNotFound,
     MassageOrderDomainFailedCreateMassageOrderErrOngoingMassageOrderExists,
     MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation,
+    MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId,
+    MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound,
     MassageOrderDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-order/constant.js"
 
@@ -22,7 +25,7 @@ import {
     TblMassageOrderColumnSet
 } from "#root/src/config/database.js"
 
-import { arrayObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
+import { arrayObjectSnakeCaseToCamelCasePropsConverter, singleObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
 
 /**
  * Function to create massage order record.
@@ -116,7 +119,7 @@ export async function createMassageOrder(req, res, next) {
             const createdMassageOrder = await t.one(createMassageOrderQuery)
 
             return {
-                createdMassageOrder: createdMassageOrder,
+                createdMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, createdMassageOrder),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })
@@ -214,7 +217,7 @@ export async function getOngoingMassageOrders(req, res, next) {
             })
 
             return {
-                ongoingMassageOrders: ongoingMassageOrders,
+                ongoingMassageOrders: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, ongoingMassageOrders),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })
@@ -248,7 +251,67 @@ export async function getOngoingMassageOrderById(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve path params.
+        const id = req.params.id
+
+        // Validate that massage order id needs to be a valid uuid.
+        if (!validate(id)) {
+            winstonLogger.info(baseMessage + " Get ongoing massage order by id flow failed because of invalid uuid id provided on the path param.")
+
+            response.message = "Failed get ongoing massage order by id."
+            response.statusCode = MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId
+
+            return res.status(httpStatusCodes.OK).json(response)
+        }
+
+        // Main get ongoing massage order by id flow.
+        const result = await db.tx(async t => {
+            // Validate that the provided massage order id is valid.
+            const massageOrder = await t.oneOrNone("SELECT * FROM ms_massage_order WHERE id = $<id>", { id: id })
+            if (massageOrder == null) {
+                winstonLogger.info(baseMessage + " Get ongoing massage order by id flow failed because the massage order is not found.")
+
+                return {
+                    createdMassageOrder: null,
+                    statusCode: MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound
+                }
+            }
+
+            const ongoingMassageOrder = await t.one(`
+                SELECT
+                    mmo.id AS massage_order_id,
+                    mmpt."name" AS massage_package_type_name,
+                    mmpkg."name" AS massage_package_name,
+                    mmpkg.price AS massage_package_price,
+                    mu.username AS member_username,
+                    mu.gender AS member_gender,
+                    mu.email AS member_email,
+                    mmo.created_at + interval '2 hour' AS massage_order_expired_at,
+                    mmo.created_at AS massage_order_created_at
+                FROM
+                    ms_massage_order mmo
+                        JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                        JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
+                        JOIN ms_user mu ON mu.id = mmo.member_user_id
+                WHERE mmo.id = $<massageOrderId>
+            `, {
+                massageOrderId: id
+            })
+
+            return {
+                ongoingMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, ongoingMassageOrder),
+                statusCode: MassageOrderDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.ongoingMassageOrder = result.ongoingMassageOrder
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**

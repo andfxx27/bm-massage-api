@@ -29,6 +29,7 @@ router.get(
 )
 router.get(
     "/:id/ongoing",
+    isRoleMiddleware([UserDomainRoleAdmin]),
     getOngoingMassageOrderById
 )
 router.get("/log-history", getMassageOrdersLogHistory)

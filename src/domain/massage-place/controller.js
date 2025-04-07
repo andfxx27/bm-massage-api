@@ -13,6 +13,7 @@ import {
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray,
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass,
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation,
+    MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAndAddress,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrReqBodyValidation,
@@ -289,7 +290,7 @@ export async function getMassagePlaces(req, res, next) {
             }))
 
             return {
-                massagePlaces: massagePlaces,
+                massagePlaces: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlaces),
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }
         })
@@ -519,7 +520,7 @@ export async function updateMassagePlaceById(req, res, next) {
             })
 
             return {
-                updatedMassagePlace: updatedMassagePlace,
+                updatedMassagePlace: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassagePlace),
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }
         })
@@ -666,7 +667,7 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
 
             return {
                 updatedMassagePlace: {
-                    updatedMassagePlaceAdmins: updatedMassagePlaceAdmins
+                    updatedMassagePlaceAdmins: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassagePlaceAdmins)
                 },
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }
