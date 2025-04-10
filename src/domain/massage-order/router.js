@@ -7,7 +7,8 @@ import {
     getMassageOrdersLogHistory,
     getMemberOrdersCountAndBanStatus,
     getOngoingMassageOrderById,
-    getOngoingMassageOrders
+    getOngoingMassageOrders,
+    updateMassageOrderOrderStatusById
 } from "#root/src/domain/massage-order/controller.js"
 
 import { UserDomainRoleAdmin, UserDomainRoleMember } from "#root/src/domain/user/constant.js"
@@ -26,6 +27,12 @@ router.get(
     "/ongoing",
     isRoleMiddleware([UserDomainRoleAdmin, UserDomainRoleMember]),
     getOngoingMassageOrders
+)
+router.patch(
+    "/:id",
+    body("orderStatus", `Field "orderStatus" value must be either "COMPLETED" or "EXPIRED"`).notEmpty().isIn(["COMPLETED", "EXPIRED"]),
+    isRoleMiddleware([UserDomainRoleAdmin]),
+    updateMassageOrderOrderStatusById
 )
 router.get(
     "/:id/ongoing",

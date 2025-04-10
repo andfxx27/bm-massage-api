@@ -49,12 +49,14 @@ export async function isAuthorizedMiddleware(req, res, next) {
         req.decodedPayload = verifyJwtResult.decodedPayload
 
         winstonLogger.info(`${baseMessage} Authorization success, attaching decoded payload to request instance.`)
-
-        return next()
     } catch (error) {
         winstonLogger.info(`${baseMessage} ${error}`)
         return res.status(httpStatusCodes.UNAUTHORIZED).json(response)
     }
+
+    // Check user ban status and update if needed.
+
+    return next()
 }
 
 /**

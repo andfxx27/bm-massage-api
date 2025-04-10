@@ -1,8 +1,12 @@
-export const MassageOrderDomainGeneralSuccessStatusCode = "0000"
+export const MassageOrderDomainMassageOrderStatusPending = "PENDING"
+export const MassageOrderDomainMassageOrderStatusCompleted = "COMPLETED"
+export const MassageOrderDomainMassageOrderStatusExpired = "EXPIRED"
 
+export const MassageOrderDomainGeneralSuccessStatusCode = "0000"
 export const MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation = "1019"
 export const MassageOrderDomainFailedCreateMassageOrderErrMassagePackageNotFound = "1020"
 export const MassageOrderDomainFailedCreateMassageOrderErrExceedsMassagePackageCapacity = "1021"
 export const MassageOrderDomainFailedCreateMassageOrderErrOngoingMassageOrderExists = "1022"
 export const MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId = "1023"
 export const MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound = "1024"
+export const MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation = "1029"

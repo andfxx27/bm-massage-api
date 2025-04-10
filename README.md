@@ -69,11 +69,23 @@ Notes: some role can have similar functions (such as view cities) but could have
 - [x] View ongoing massage orders endpoint
 - [x] View ongoing massage order detail endpoint
 - [x] View massage orders log history endpoint
+- [ ] Update massage order's order status endpoint(*)
 - [x] View member's completed, expired orders count, and ban status endpoint
 - [x] Request member ban approval endpoint
-- [x] Approve member ban request endpoint
-- [ ] View member ban requests endpoint
+- [x] Approve member ban request endpoint(*)
+- [x] View member ban requests endpoint
 - [ ] View profit reporting endpoint
 - [ ] View massage package types endpoint
 - [ ] Add new massage package at specific massage place endpoint
+- [ ] Add ban checking process in authorization middleware
 - [ ] Adjust response message for failed cases across all endpoint
+
+Legends
+---
+
+Below points are improvement that are NICE TO HAVE, add after finishing core feature.
+
+- *Need to check for expired at & ban lifted at property.
+- *Need to make sure the process of updating massage order status to COMPLETED/ EXPIRED & updating member ban approval status to BANNED/ REVOKED is correct logically, such as:
+1. We cannot update massage order status to COMPLETED if time-wise the massage order is already expired.
+2. Etc (Add more if thought of when doing the flow improvement).

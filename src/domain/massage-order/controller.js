@@ -10,6 +10,7 @@ import {
     MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation,
     MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId,
     MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound,
+    MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation,
     MassageOrderDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-order/constant.js"
 
@@ -456,6 +457,47 @@ export async function getMemberOrdersCountAndBanStatus(req, res, next) {
 
         response.statusCode = result.statusCode
         response.result.memberOrdersCountAndBanStatus = result.memberOrdersCountAndBanStatus
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
+}
+
+/**
+ * Function to update massage order's order status.
+ * @param {express.Request} req Express request instance.
+ * @param {express.Response} res Express response instance.
+ * @param {express.NextFunction} next Express next function handler.
+ */
+export async function updateMassageOrderOrderStatusById(req, res, next) {
+    const reqIdentifier = req.reqIdentifier
+    const baseMessage = `req-${reqIdentifier} - [ massageOrderController.updateMassageOrderOrderStatusById ] called.`
+
+    winstonLogger.info(baseMessage)
+
+    const response = {
+        message: "Success update massage order's order status by id.",
+        statusCode: MassageOrderDomainGeneralSuccessStatusCode,
+        result: {
+            updatedMassageOrder: null
+        }
+    }
+
+    try {
+        // Validate request body.
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because an error occurred during request body validation.")
+
+            response.message = "Failed update massage order's order status by id."
+            response.statusCode = MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation
+            response.result = {
+                errors: Array.from(new Set(errors.array().map(e => e.msg)))
+            }
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
 
         return res.status(httpStatusCodes.OK).json(response)
     } catch (error) {

@@ -269,6 +269,13 @@ export async function requestMemberBanApproval(req, res, next) {
                 }
             }
 
+            /**
+             * TODO Remove ban lifted at property during the member ban approval request process.
+             * After careful consideration, I think the ban lifted at property should have been added after the owner have banned the user-
+             * -instead of being added initially during the member ban approval request process.
+             * Need to assess this flow update.
+             */
+
             // Create member ban request record.
             const now = new Date()
             const banLiftedAt = new Date(now.setDate(now.getDate() + 3))
@@ -416,6 +423,26 @@ export async function getMemberBanApprovalRequests(req, res, next) {
     }
 
     try {
+        // Retrieve query params.
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
+
+        // Main get member ban approval requests flow.
+        const result = await db.tx(async t => {
+            const memberBanApprovalRequests = await t.any("SELECT * FROM ms_member_ban WHERE approval_status = 'PENDING' LIMIT $<limit> OFFSET $<offset>", {
+                limit: limit,
+                offset: (page - 1) * limit
+            })
+
+            return {
+                memberBanApprovalRequests: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBanApprovalRequests),
+                statusCode: UserDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.memberBanApprovalRequests = result.memberBanApprovalRequests
+
         return res.status(httpStatusCodes.OK).json(response)
     } catch (error) {
         return next(error)
