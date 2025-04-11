@@ -4,6 +4,11 @@ import { validationResult } from "express-validator"
 import httpStatusCodes from "http-status-codes"
 
 import {
+    MassagePlaceDomainFailedCreateMassagePackageErrExceedsMaxCapacity,
+    MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePackageTypeId,
+    MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceAndAdminUserId,
+    MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceId,
+    MassagePlaceDomainFailedCreateMassagePackageErrReqBodyValidation,
     MassagePlaceDomainFailedCreateMassagePlaceErrDuplicateAdminNames,
     MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists,
     MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass,
@@ -30,6 +35,7 @@ import {
 import {
     db,
     pgp,
+    TblMassagePackageColumnSet,
     TblMassagePlaceAdminColumnSet,
     TblMassagePlaceColumnSet,
     TblUserColumnSet,
@@ -66,7 +72,7 @@ export async function createMassagePlace(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Create massage flow failed because an error occurred during request body validation.")
+            winstonLogger.info(baseMessage + " Create massage place flow failed because an error occurred during request body validation.")
 
             response.message = "Failed create massage place."
             response.statusCode = MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation
@@ -81,7 +87,7 @@ export async function createMassagePlace(req, res, next) {
         const result = await db.tx(async t => {
             // Check if provided admin names contain duplicates.
             if (new Set(req.body.adminNames).size !== req.body.adminNames.length) {
-                winstonLogger.info(baseMessage + " Create massage flow failed because there is a duplicate admin names.")
+                winstonLogger.info(baseMessage + " Create massage place flow failed because there is a duplicate admin names.")
                 response.message = "Failed create massage place."
                 return {
                     createdMassagePlace: null,
@@ -92,7 +98,7 @@ export async function createMassagePlace(req, res, next) {
             // Check if default admin password exists.
             const defaultAdminPassword = process.env.MASSAGE_PLACE_ADMIN_DEFAULT_PASS
             if (!defaultAdminPassword) {
-                winstonLogger.info(baseMessage + " Create massage flow failed because there is no default admin pass found.")
+                winstonLogger.info(baseMessage + " Create massage place flow failed because there is no default admin pass found.")
                 response.message = "Failed create massage place."
                 return {
                     createdMassagePlace: null,
@@ -112,7 +118,7 @@ export async function createMassagePlace(req, res, next) {
                 cityId: req.body.cityId
             })
             if (existingMassagePlace != null) {
-                winstonLogger.info(baseMessage + " Create massage flow failed because there is an existing place with same name, address, and city id.")
+                winstonLogger.info(baseMessage + " Create massage place flow failed because there is an existing place with same name, address, and city id.")
                 response.message = "Failed create massage place."
                 return {
                     createdMassagePlace: null,
@@ -201,22 +207,94 @@ export async function createMassagePackage(req, res, next) {
 
     try {
         // Validate request body.
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            winstonLogger.info(baseMessage + " Create massage package flow failed because an error occurred during request body validation.")
+
+            response.message = "Failed create massage package."
+            response.statusCode = MassagePlaceDomainFailedCreateMassagePackageErrReqBodyValidation
+            response.result = {
+                errors: Array.from(new Set(errors.array().map(e => e.msg)))
+            }
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
 
         // Main create massage package flow.
         const result = await db.tx(async t => {
             // TODO Implement create massage package endpoint
             // Check if massage place id is valid.
+            const massagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE id = $<id>", { id: req.body.massagePlaceId })
+            if (massagePlace == null) {
+                winstonLogger.info(baseMessage + " Create massage package flow failed because the specified massage place id is invalid.")
+                response.message = "Failed create massage package."
+                return {
+                    createdMassagePackage: null,
+                    statusCode: MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceId
+                }
+            }
+
+            const convertedMassagePlace = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlace)
 
             // Check if authorized admin works at the massage place.
+            const massagePlaceAdminCount = await t.one(`
+                SELECT COUNT(*)::int FROM ms_massage_place_admin 
+                WHERE 
+                    massage_place_id = $<massagePlaceId>  
+                    AND
+                    admin_user_id = $<adminUserId>  
+            `, {
+                massagePlaceId: req.body.massagePlaceId,
+                adminUserId: req.decodedPayload.id
+            })
+            if (massagePlaceAdminCount.count !== 1) {
+                winstonLogger.info(baseMessage + " Create massage package flow failed because the authorized admin might not work at the specified massage place.")
+                response.message = "Failed create massage package."
+                return {
+                    createdMassagePackage: null,
+                    statusCode: MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceAndAdminUserId
+                }
+            }
 
             // Check if new massage package addition doesn't exceed max capacity.
+            const currentMassagePackageCapacity = await t.any(`
+                SELECT SUM(capacity) FROM ms_massage_package
+                WHERE massage_place_id = $<massagePlaceId>
+            `, {
+                massagePlaceId: req.body.massagePlaceId
+            })
+            if (currentMassagePackageCapacity + req.body.capacity > massagePlace.capacity) {
+                winstonLogger.info(baseMessage + " Create massage package flow failed because the massage package to be created's capacity exceeds the massage place max capacity.")
+                response.message = "Failed create massage package."
+                return {
+                    createdMassagePackage: null,
+                    statusCode: MassagePlaceDomainFailedCreateMassagePackageErrExceedsMaxCapacity
+                }
+            }
 
             // Check if massage package type is valid.
+            const massagePackageType = await t.oneOrNone(`SELECT * FROM ms_massage_package_type WHERE id = $<massagePackageTypeId>`, {
+                massagePackageTypeId: req.body.massagePackageTypeId
+            })
+            if (massagePackageType == null) {
+                winstonLogger.info(baseMessage + " Create massage package flow failed because the specified massage package type id is invalid.")
+                response.message = "Failed create massage package."
+                return {
+                    createdMassagePackage: null,
+                    statusCode: MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePackageTypeId
+                }
+            }
 
             // Create massage package record.
+            const { insert } = pgp.helpers
+            const newMassagePackage = { ...req.body }
+            newMassagePackage.adminUserId = req.decodedPayload.id
+
+            const insertMassagePackageQuery = insert(newMassagePackage, TblMassagePackageColumnSet) + " RETURNING *"
+            const createdMassagePackage = await t.one(insertMassagePackageQuery)
 
             return {
-                createdMassagePackage: null,
+                createdMassagePackage: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, createdMassagePackage),
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }
         })

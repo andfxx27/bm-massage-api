@@ -13,6 +13,17 @@ export const TblMassageOrderColumnSet = new ColumnSet([
     table: "ms_massage_order"
 })
 
+export const TblMassagePackageColumnSet = new ColumnSet([
+    { name: "name", prop: "name" },
+    { name: "capacity", prop: "capacity" },
+    { name: "price", prop: "price" },
+    { name: "admin_user_id", prop: "adminUserId" },
+    { name: "massage_place_id", prop: "massagePlaceId" },
+    { name: "massage_package_type_id", prop: "massagePackageTypeId" }
+], {
+    table: "ms_massage_package"
+})
+
 export const TblMassagePlaceColumnSet = new ColumnSet([
     { name: "name", prop: "name" },
     { name: "max_capacity", prop: "maxCapacity" },

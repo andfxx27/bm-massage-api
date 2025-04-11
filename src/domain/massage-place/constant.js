@@ -13,3 +13,8 @@ export const MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAnd
 export const MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation = "1016"
 export const MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray = "1017"
 export const MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass = "1018"
+export const MassagePlaceDomainFailedCreateMassagePackageErrReqBodyValidation = "1036"
+export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceId = "1037"
+export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceAndAdminUserId = "1038"
+export const MassagePlaceDomainFailedCreateMassagePackageErrExceedsMaxCapacity = "1039"
+export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePackageTypeId = "1040"
