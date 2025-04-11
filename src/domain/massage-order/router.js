@@ -29,7 +29,7 @@ router.get(
     getOngoingMassageOrders
 )
 router.patch(
-    "/:id",
+    "/:id/order-status",
     body("orderStatus", `Field "orderStatus" value must be either "COMPLETED" or "EXPIRED"`).notEmpty().isIn(["COMPLETED", "EXPIRED"]),
     isRoleMiddleware([UserDomainRoleAdmin]),
     updateMassageOrderOrderStatusById

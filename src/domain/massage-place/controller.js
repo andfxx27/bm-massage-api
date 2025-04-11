@@ -199,7 +199,35 @@ export async function createMassagePackage(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.CREATED).json(response)
+    try {
+        // Validate request body.
+
+        // Main create massage package flow.
+        const result = await db.tx(async t => {
+            // TODO Implement create massage package endpoint
+            // Check if massage place id is valid.
+
+            // Check if authorized admin works at the massage place.
+
+            // Check if new massage package addition doesn't exceed max capacity.
+
+            // Check if massage package type is valid.
+
+            // Create massage package record.
+
+            return {
+                createdMassagePackage: null,
+                statusCode: MassagePlaceDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.createdMassagePackage = result.createdMassagePackage
+
+        return res.status(httpStatusCodes.CREATED).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**

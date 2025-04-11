@@ -10,7 +10,9 @@ import {
     MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation,
     MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId,
     MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound,
+    MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidMassageOrderAndAuthorizedAdmin,
     MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidPathParamMassageOrderId,
+    MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrMassageOrderAlreadyUpdated,
     MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation,
     MassageOrderDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-order/constant.js"
@@ -466,7 +468,7 @@ export async function getMemberOrdersCountAndBanStatus(req, res, next) {
 }
 
 /**
- * Function to update massage order's order status.
+ * Function to update massage order's order status by id.
  * @param {express.Request} req Express request instance.
  * @param {express.Response} res Express response instance.
  * @param {express.NextFunction} next Express next function handler.
@@ -513,10 +515,62 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
+        // TODO Implement update massage order's order status by id endpoint.
         // Main update massage order's order status by id flow.
         const result = await db.tx(async t => {
+            // Validate that the massage order to be updated is from the massage place where the authorized admin works.
+            const massageOrder = await t.oneOrNone(`
+                select
+                    mmo.*
+                from 
+                    ms_massage_place_admin mmpa
+                        join ms_massage_place mmplc on mmplc.id = mmpa.massage_place_id
+                        join ms_massage_package mmpkg on mmpkg.massage_place_id = mmplc.id
+                        join ms_massage_order mmo on mmo.massage_package_id = mmpkg.id
+                where 
+                    mmpa.admin_user_id = $<adminUserId>
+                    and
+                    mmo.id = $<massageOrderId>
+            `, {
+                adminUserId: req.decodedPayload.id,
+                massageOrderId: id
+            })
+            if (massageOrder == null) {
+                winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because the authorized admin might not work at the massage place where the order is created.")
+                response.message = "Failed update massage order's order status by id."
+                return {
+                    updatedMassageOrder: null,
+                    statusCode: MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidMassageOrderAndAuthorizedAdmin
+                }
+            }
+
+            const convertedMassageOrder = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrder)
+            if (convertedMassageOrder.updatedAt != null) {
+                winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because the order status is already updated.")
+                response.message = "Failed update massage order's order status by id."
+                return {
+                    updatedMassageOrder: null,
+                    statusCode: MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrMassageOrderAlreadyUpdated
+                }
+            }
+
+            const updatedMassageOrder = await t.one(`
+                UPDATE ms_massage_order
+                SET 
+                    order_status = $<orderStatus>,
+                    admin_user_id = $<adminUserId>,
+                    updated_at = $<updatedAt>
+                WHERE id = $<massageOrderId>
+                RETURNING *
+            `, {
+                orderStatus: req.body.orderStatus,
+                adminUserId: req.decodedPayload.id,
+                updatedAt: new Date(),
+                massageOrderId: id
+            })
+
             return {
-                updatedMassageOrder: null,
+                updatedMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassageOrder),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })
