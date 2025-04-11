@@ -403,7 +403,41 @@ export async function getMassageOrderProfitReport(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve query params.
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
+
+        // Main get massage order profit report flow.
+        const result = await db.tx(async t => {
+            const massageOrderProfitReport = await t.any(`
+                SELECT
+                    mmo.created_at::date::text,
+                    sum(mmpkg.price)::int AS profit
+                FROM 
+                    ms_massage_order mmo
+                        JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                WHERE mmo.order_status = 'COMPLETED'
+                GROUP BY mmo.created_at::date
+                LIMIT $<limit> OFFSET $<offset>   
+            `, {
+                limit: limit,
+                offset: (page - 1) * limit
+            })
+
+            return {
+                massageOrderProfitReport: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrderProfitReport),
+                statusCode: MassageOrderDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.massageOrderProfitReport = result.massageOrderProfitReport
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
 
 /**
@@ -515,21 +549,20 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
-        // TODO Implement update massage order's order status by id endpoint.
         // Main update massage order's order status by id flow.
         const result = await db.tx(async t => {
             // Validate that the massage order to be updated is from the massage place where the authorized admin works.
             const massageOrder = await t.oneOrNone(`
-                select
+                SELECT
                     mmo.*
-                from 
+                FROM 
                     ms_massage_place_admin mmpa
-                        join ms_massage_place mmplc on mmplc.id = mmpa.massage_place_id
-                        join ms_massage_package mmpkg on mmpkg.massage_place_id = mmplc.id
-                        join ms_massage_order mmo on mmo.massage_package_id = mmpkg.id
-                where 
+                        JOIN ms_massage_place mmplc ON mmplc.id = mmpa.massage_place_id
+                        JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmplc.id
+                        JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
+                WHERE 
                     mmpa.admin_user_id = $<adminUserId>
-                    and
+                    AND
                     mmo.id = $<massageOrderId>
             `, {
                 adminUserId: req.decodedPayload.id,

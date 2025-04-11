@@ -74,7 +74,7 @@ Notes: some role can have similar functions (such as view cities) but could have
 - [x] Request member ban approval endpoint
 - [x] Approve member ban request endpoint
 - [x] View member ban requests endpoint
-- [ ] View profit reporting endpoint
+- [x] View profit reporting endpoint
 - [x] View massage package types endpoint
 - [ ] Add new massage package at specific massage place endpoint
 - [ ] Add ban checking process in authorization middleware

@@ -11,7 +11,7 @@ import {
     updateMassageOrderOrderStatusById
 } from "#root/src/domain/massage-order/controller.js"
 
-import { UserDomainRoleAdmin, UserDomainRoleMember } from "#root/src/domain/user/constant.js"
+import { UserDomainRoleAdmin, UserDomainRoleMember, UserDomainRoleOwner } from "#root/src/domain/user/constant.js"
 
 import { isRoleMiddleware } from "#root/src/middleware/auth.js"
 
@@ -44,7 +44,11 @@ router.get(
     isRoleMiddleware([UserDomainRoleAdmin]),
     getMassageOrdersLogHistory
 )
-router.get("/profit-report", getMassageOrderProfitReport)
+router.get(
+    "/profit-report",
+    isRoleMiddleware([UserDomainRoleOwner]),
+    getMassageOrderProfitReport
+)
 router.get(
     "/member-count",
     isRoleMiddleware([UserDomainRoleAdmin]),
