@@ -77,5 +77,5 @@ Notes: some role can have similar functions (such as view cities) but could have
 - [x] View profit reporting endpoint
 - [x] View massage package types endpoint
 - [x] Add new massage package at specific massage place endpoint
-- [ ] Add ban checking process in authorization middleware
+- [x] Add ban checking process in authorization middleware
 - [x] Adjust response message for failed cases across all endpoint
