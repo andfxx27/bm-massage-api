@@ -222,7 +222,6 @@ export async function createMassagePackage(req, res, next) {
 
         // Main create massage package flow.
         const result = await db.tx(async t => {
-            // TODO Implement create massage package endpoint
             // Check if massage place id is valid.
             const massagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE id = $<id>", { id: req.body.massagePlaceId })
             if (massagePlace == null) {

@@ -4,9 +4,13 @@ import httpStatusCodes from "http-status-codes"
 import { db } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
-import { MiddlewareDomainErrUnauthorized } from "#root/src/middleware/constant.js"
+import { MiddlewareDomainErrGeneralStatusCode, MiddlewareDomainErrUnauthorized, MiddlewareDomainErrUserBanned, MiddlewareDomainGeneralSuccessStatusCode } from "#root/src/middleware/constant.js"
 
 import { verifyJwt } from "#root/src/utils/auth.js"
+import {
+    arrayObjectSnakeCaseToCamelCasePropsConverter,
+    singleObjectSnakeCaseToCamelCasePropsConverter
+} from "#root/src/utils/string.js"
 
 /**
  * Function to check whether the accessing request is authorized.
@@ -77,16 +81,39 @@ export function isRoleMiddleware(roles) {
             result: null
         }
 
-        await db.tx(async t => {
+        const result = await db.tx(async t => {
             // Get user record.
             const users = await t.manyOrNone(`SELECT * FROM ms_user WHERE id = $<id>`, { id: req.decodedPayload.id })
             if (users.length === 0) {
                 winstonLogger.info(`${baseMessage} Authorization failed, no user with id ${req.decodedPayload.id} found.`)
-                return res.status(httpStatusCodes.UNAUTHORIZED).json(response)
+                return {
+                    statusCode: MiddlewareDomainGeneralSuccessStatusCode
+                }
             }
 
             // TODO Check for ban status.
+            const memberBan = await t.oneOrNone("SELECT * FROM ms_member_ban WHERE member_user_id = $<id> AND approval_status = 'BANNED' ORDER BY created_at DESC LIMIT 1", { id: req.decodedPayload.id })
+            const convertedMemberBan = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBan)
+            if (convertedMemberBan != null) {
+                const currentDate = new Date()
+                const currentDateUnix = currentDate.getTime()
+                const banLiftedDateUnix = convertedMemberBan.banLiftedAt.getTime()
+                if (banLiftedDateUnix > currentDateUnix) {
+                    winstonLogger.info(`${baseMessage} Authorization failed, user with id ${req.decodedPayload.id} is currently banned and will be lifted at ${convertedMemberBan.banLiftedAt}.`)
+                    return {
+                        statusCode: MiddlewareDomainErrUserBanned
+                    }
+                }
+            }
+
+            return {
+                statusCode: MiddlewareDomainErrGeneralStatusCode
+            }
         })
+        if (result !== MiddlewareDomainGeneralSuccessStatusCode) {
+            response.statusCode = result.statusCode
+            return res.status(httpStatusCodes.UNAUTHORIZED).json(response)
+        }
 
         // Validate user role.
         if (roles.filter(r => r === req.decodedPayload.role).length === 0) {
