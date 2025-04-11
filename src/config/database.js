@@ -54,8 +54,7 @@ export const TblUserUpdateColumnSet = new ColumnSet([
 export const TblMemberBanColumnSet = new ColumnSet([
     { name: "member_user_id", prop: "memberUserId" },
     { name: "admin_user_id", prop: "adminUserId" },
-    { name: "ban_reason", prop: "banReason" },
-    { name: "ban_lifted_at", prop: "banLiftedAt" }
+    { name: "ban_reason", prop: "banReason" }
 ], {
     table: "ms_member_ban"
 })

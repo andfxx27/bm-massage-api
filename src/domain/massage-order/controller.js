@@ -10,6 +10,7 @@ import {
     MassageOrderDomainFailedCreateMassageOrderErrReqBodyValidation,
     MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId,
     MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound,
+    MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidPathParamMassageOrderId,
     MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation,
     MassageOrderDomainGeneralSuccessStatusCode
 } from "#root/src/domain/massage-order/constant.js"
@@ -69,7 +70,7 @@ export async function createMassageOrder(req, res, next) {
             const massagePackage = await t.oneOrNone("SELECT * FROM ms_massage_package WHERE id = $<id>", { id: req.body.massagePackageId })
             if (massagePackage == null) {
                 winstonLogger.info(baseMessage + " Create massage order flow failed because of invalid massage package id.")
-
+                response.message = "Failed create massage order."
                 return {
                     createdMassageOrder: null,
                     statusCode: MassageOrderDomainFailedCreateMassageOrderErrMassagePackageNotFound
@@ -80,7 +81,7 @@ export async function createMassageOrder(req, res, next) {
             const ongoingMassageOrders = await t.any("SELECT * FROM ms_massage_order WHERE massage_package_id = $<id> AND order_status = 'PENDING'", { id: req.body.massagePackageId })
             if (ongoingMassageOrders.length === massagePackage.capacity) {
                 winstonLogger.info(baseMessage + " Create massage order flow failed because of the selected massage package is full/ exceeds capacity.")
-
+                response.message = "Failed create massage order."
                 return {
                     createdMassageOrder: null,
                     statusCode: MassageOrderDomainFailedCreateMassageOrderErrExceedsMassagePackageCapacity
@@ -106,7 +107,7 @@ export async function createMassageOrder(req, res, next) {
 
                 if (expiredMassageOrders.length !== authorizedMemberMassageOrders.length) {
                     winstonLogger.info(baseMessage + " Create massage order flow failed because authorized member still has ongoing massage order.")
-
+                    response.message = "Failed create massage order."
                     return {
                         createdMassageOrder: null,
                         statusCode: MassageOrderDomainFailedCreateMassageOrderErrOngoingMassageOrderExists
@@ -272,7 +273,7 @@ export async function getOngoingMassageOrderById(req, res, next) {
             const massageOrder = await t.oneOrNone("SELECT * FROM ms_massage_order WHERE id = $<id>", { id: id })
             if (massageOrder == null) {
                 winstonLogger.info(baseMessage + " Get ongoing massage order by id flow failed because the massage order is not found.")
-
+                response.message = "Failed get ongoing massage order by id."
                 return {
                     createdMassageOrder: null,
                     statusCode: MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound
@@ -485,6 +486,19 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
     }
 
     try {
+        // Retrieve path params.
+        const id = req.params.id
+
+        // Validate that massage order id needs to be a valid uuid.
+        if (!validate(id)) {
+            winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because of invalid uuid id provided on the path param.")
+
+            response.message = "Failed update massage order's order status by id."
+            response.statusCode = MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidPathParamMassageOrderId
+
+            return res.status(httpStatusCodes.OK).json(response)
+        }
+
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
@@ -498,6 +512,17 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
 
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
+
+        // Main update massage order's order status by id flow.
+        const result = await db.tx(async t => {
+            return {
+                updatedMassageOrder: null,
+                statusCode: MassageOrderDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.updatedMassageOrder = result.updatedMassageOrder
 
         return res.status(httpStatusCodes.OK).json(response)
     } catch (error) {

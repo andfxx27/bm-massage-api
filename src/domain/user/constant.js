@@ -23,3 +23,6 @@ export const UserDomainFailedRequestMemberBanApprovalErrReqBodyValidation = "102
 export const UserDomainFailedRequestMemberBanApprovalErrUserNotFound = "1026"
 export const UserDomainFailedRequestMemberBanApprovalErrBanRequestAlreadyExists = "1027"
 export const UserDomainFailedApproveMemberBanRequestErrReqBodyValidation = "1028"
+export const UserDomainFailedApproveMemberBanRequestErrRequestNotFound = "1031"
+export const UserDomainFailedApproveMemberBanRequestErrRequestAlreadyProcessed = "1032"
+export const UserDomainFailedRequestMemberBanApprovalErrInvalidUserRole = "1033"

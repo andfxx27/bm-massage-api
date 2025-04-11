@@ -77,13 +77,15 @@ export function isRoleMiddleware(roles) {
             result: null
         }
 
-        // Get user record.
         await db.tx(async t => {
+            // Get user record.
             const users = await t.manyOrNone(`SELECT * FROM ms_user WHERE id = $<id>`, { id: req.decodedPayload.id })
             if (users.length === 0) {
                 winstonLogger.info(`${baseMessage} Authorization failed, no user with id ${req.decodedPayload.id} found.`)
                 return res.status(httpStatusCodes.UNAUTHORIZED).json(response)
             }
+
+            // TODO Check for ban status.
         })
 
         // Validate user role.

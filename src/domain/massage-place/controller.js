@@ -82,9 +82,7 @@ export async function createMassagePlace(req, res, next) {
             // Check if provided admin names contain duplicates.
             if (new Set(req.body.adminNames).size !== req.body.adminNames.length) {
                 winstonLogger.info(baseMessage + " Create massage flow failed because there is a duplicate admin names.")
-
                 response.message = "Failed create massage place."
-
                 return {
                     createdMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedCreateMassagePlaceErrDuplicateAdminNames
@@ -95,9 +93,7 @@ export async function createMassagePlace(req, res, next) {
             const defaultAdminPassword = process.env.MASSAGE_PLACE_ADMIN_DEFAULT_PASS
             if (!defaultAdminPassword) {
                 winstonLogger.info(baseMessage + " Create massage flow failed because there is no default admin pass found.")
-
                 response.message = "Failed create massage place."
-
                 return {
                     createdMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass
@@ -117,9 +113,7 @@ export async function createMassagePlace(req, res, next) {
             })
             if (existingMassagePlace != null) {
                 winstonLogger.info(baseMessage + " Create massage flow failed because there is an existing place with same name, address, and city id.")
-
                 response.message = "Failed create massage place."
-
                 return {
                     createdMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists
@@ -391,9 +385,7 @@ export async function getMassagePlaceById(req, res, next) {
             const massagePlaceHeader = await t.oneOrNone(massagePlaceHeaderQuery, { id: id })
             if (massagePlaceHeader == null) {
                 winstonLogger.info(baseMessage + " Get massage place by id flow failed because massage place with provided id doesn't exists.")
-
                 response.message = "Failed get massage place by id."
-
                 return {
                     massagePlace: null,
                     statusCode: MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound
@@ -465,9 +457,7 @@ export async function updateMassagePlaceById(req, res, next) {
             const massagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE id = $<id>", { id: id })
             if (massagePlace == null) {
                 winstonLogger.info(baseMessage + " Update massage place by id flow failed because massage place with provided id doesn't exists.")
-
                 response.message = "Failed update massage place by id."
-
                 return {
                     updatedMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound
@@ -479,9 +469,7 @@ export async function updateMassagePlaceById(req, res, next) {
             // Check if updated max capacity is fewer than current max capacity.
             if (convertedMassagePlace.maxCapacity < req.body.maxCapacity) {
                 winstonLogger.info(baseMessage + " Update massage place by id flow failed because the updated max capacity is fewer than current max capacity.")
-
                 response.message = "Failed update massage place by id."
-
                 return {
                     updatedMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue
@@ -492,9 +480,7 @@ export async function updateMassagePlaceById(req, res, next) {
             const existingMassagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE name = $<name> and address = $<address>", { name: req.body.name, address: req.body.address })
             if (existingMassagePlace != null && existingMassagePlace.id !== id) {
                 winstonLogger.info(baseMessage + " Update massage place by id flow failed because the name and address conflicts with other massage place with id = " + existingMassagePlace.id)
-
                 response.message = "Failed update massage place by id."
-
                 return {
                     updatedMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAndAddress
@@ -578,9 +564,7 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
             const defaultAdminPassword = process.env.MASSAGE_PLACE_ADMIN_DEFAULT_PASS
             if (!defaultAdminPassword) {
                 winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because default admin pass is not found.")
-
                 response.message = "Failed update massage place admins by id."
-
                 return {
                     updatedMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass
@@ -601,9 +585,7 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
 
             if (!validAdmins) {
                 winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because of invalid admins object array.")
-
                 response.message = "Failed update massage place admins by id."
-
                 return {
                     updatedMassagePlace: null,
                     statusCode: MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray

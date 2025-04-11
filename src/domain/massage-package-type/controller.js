@@ -3,7 +3,10 @@ import httpStatusCodes from "http-status-codes"
 
 import { MassagePackageTypeDomainGeneralSuccessStatusCode } from "#root/src/domain/massage-package-type/constant.js"
 
+import { db } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
+
+import { arrayObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
 
 /**
  * Function to get massage package types record.
@@ -25,5 +28,29 @@ export async function getMassagePackageTypes(req, res, next) {
         }
     }
 
-    return res.status(httpStatusCodes.OK).json(response)
+    try {
+        // Retrieve query params.
+        const page = +(req.query.page ?? 1)
+        const limit = +(req.query.limit ?? 15)
+
+        // Main get massage package types flow.
+        const result = await db.tx(async t => {
+            const massagePackageTypes = await t.any("SELECT * FROM ms_massage_package_type LIMIT $<limit> OFFSET $<offset>", {
+                limit: limit,
+                offset: (page - 1) * limit
+            })
+
+            return {
+                massagePackageTypes: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePackageTypes),
+                statusCode: MassagePackageTypeDomainGeneralSuccessStatusCode
+            }
+        })
+
+        response.statusCode = result.statusCode
+        response.result.massagePackageTypes = result.massagePackageTypes
+
+        return res.status(httpStatusCodes.OK).json(response)
+    } catch (error) {
+        return next(error)
+    }
 }
