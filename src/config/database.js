@@ -6,7 +6,7 @@ export const pgp = pgPromise(initOptions)
 
 const { ColumnSet } = pgp.helpers
 
-export const TblMassageOrderColumnSet = new ColumnSet([
+export const TblMassageOrderInsertColumnSet = new ColumnSet([
     { name: "member_user_id", prop: "memberUserId" },
     { name: "massage_package_id", prop: "massagePackageId" }
 ], {

@@ -14,7 +14,8 @@ import {
     MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidPathParamMassageOrderId,
     MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrMassageOrderAlreadyUpdated,
     MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation,
-    MassageOrderDomainGeneralSuccessStatusCode
+    MassageOrderDomainGeneralSuccessStatusCode,
+    MassageOrderDomainMassageOrderStatusPending
 } from "#root/src/domain/massage-order/constant.js"
 
 import {
@@ -22,14 +23,17 @@ import {
     UserDomainRoleMember
 } from "#root/src/domain/user/constant.js"
 
-import { winstonLogger } from "#root/src/config/logger.js"
 import {
     db,
     pgp,
-    TblMassageOrderColumnSet
+    TblMassageOrderInsertColumnSet
 } from "#root/src/config/database.js"
+import { winstonLogger } from "#root/src/config/logger.js"
 
-import { arrayObjectSnakeCaseToCamelCasePropsConverter, singleObjectSnakeCaseToCamelCasePropsConverter } from "#root/src/utils/string.js"
+import {
+    arrayObjectSnakeCaseToCamelCasePropsConverter,
+    singleObjectSnakeCaseToCamelCasePropsConverter
+} from "#root/src/utils/string.js"
 
 /**
  * Function to create massage order record.
@@ -66,12 +70,24 @@ export async function createMassageOrder(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
+        const { massagePackageId } = req.body
+        const { id: memberUserId } = req.decodedPayload
+
         // Main create massage order flow.
         const result = await db.tx(async t => {
-            // Check if provided massage package id is valid.
-            const massagePackage = await t.oneOrNone("SELECT * FROM ms_massage_package WHERE id = $<id>", { id: req.body.massagePackageId })
-            if (massagePackage == null) {
-                winstonLogger.info(baseMessage + " Create massage order flow failed because of invalid massage package id.")
+            // Validate massage package id.
+            const massagePackageEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_massage_package
+                WHERE
+                    id = $<id>  
+            `, {
+                id: massagePackageId
+            })
+            if (massagePackageEntity == null) {
+                winstonLogger.info(`${baseMessage} Create massage order flow failed because massage package with id of ${massagePackageId} is not found.`)
                 response.message = "Failed create massage order."
                 return {
                     createdMassageOrder: null,
@@ -79,10 +95,28 @@ export async function createMassageOrder(req, res, next) {
                 }
             }
 
-            // Check whether the package is available (by checking its capacity).
-            const ongoingMassageOrders = await t.any("SELECT * FROM ms_massage_order WHERE massage_package_id = $<id> AND order_status = 'PENDING'", { id: req.body.massagePackageId })
+            const massagePackage = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePackageEntity)
+
+            /**
+             * Validate massage package capacity.
+             * Ongoing massage orders' count must not exceed massage package capacity.
+             */
+            const ongoingMassageOrdersEntity = await t.any(`
+                SELECT 
+                    * 
+                FROM 
+                    ms_massage_order 
+                WHERE 
+                    massage_package_id = $<massagePackageId> 
+                    AND order_status = $<massageOrderStatus>
+            `, {
+                massagePackageId: massagePackageId,
+                massageOrderStatus: MassageOrderDomainMassageOrderStatusPending
+            })
+
+            const ongoingMassageOrders = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, ongoingMassageOrdersEntity)
             if (ongoingMassageOrders.length === massagePackage.capacity) {
-                winstonLogger.info(baseMessage + " Create massage order flow failed because of the selected massage package is full/ exceeds capacity.")
+                winstonLogger.info(`${baseMessage} Create massage order flow failed because the current capacity of massage package with id of ${massagePackageId} is full.`)
                 response.message = "Failed create massage order."
                 return {
                     createdMassageOrder: null,
@@ -90,25 +124,36 @@ export async function createMassageOrder(req, res, next) {
                 }
             }
 
-            // Validate that the user is currently free/ don't have ongoing massage order.
-            const authorizedMemberMassageOrders = await t.any("SELECT * FROM ms_massage_order WHERE member_user_id = $<memberUserId> AND order_status = 'PENDING'", { memberUserId: req.decodedPayload.id })
-            if (authorizedMemberMassageOrders.length > 0) {
-                // There could possibly be massage orders with "PENDING" status which is not updated to "EXPIRED" yet since we do it manually.
-                // We can excuse those orders, therefore allowing member to create a new massage order.
-                // Massage order expiration time is 2 hours after the order creation date.
-
+            /**
+             * Validate member's ongoing massage order.
+             * If a member still have ongoing order, they can't create another massage order.
+             * Need to check for ongoing massage orders with "PENDING" massage order status which is not updated to "EXPIRED" yet since we do it manually.
+             * We can excuse those orders, allowing member to create a new massage order.
+             * Massage order expiration time is 2 hours after the order creation date.
+             */
+            const massageOrdersEntity = await t.manyOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_massage_order
+                WHERE
+                    member_user_id = $<memberUserId>
+                    AND order_status = $<massageOrderStatus>    
+            `, {
+                memberUserId: memberUserId,
+                massageOrderStatus: MassageOrderDomainMassageOrderStatusPending
+            })
+            if (massageOrdersEntity.length > 0) {
                 const currentDate = new Date()
                 const currentDateUnix = currentDate.getTime()
-                const convertedAuthorizedMemberMassageOrders = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, authorizedMemberMassageOrders)
-                const expiredMassageOrders = convertedAuthorizedMemberMassageOrders.filter((order) => {
-                    const expiredDateUnix = order.createdAt.getTime() + (2 * 60 * 60 * 1000)
-                    if (expiredDateUnix <= currentDateUnix) {
-                        return order
-                    }
+                const massageOrders = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrdersEntity)
+                const expiredMassageOrders = massageOrders.filter((massageOrder) => {
+                    const expiredDateUnix = massageOrder.createdAt.getTime() + (2 * 60 * 60 * 1000)
+                    return expiredDateUnix <= currentDateUnix
                 })
 
-                if (expiredMassageOrders.length !== authorizedMemberMassageOrders.length) {
-                    winstonLogger.info(baseMessage + " Create massage order flow failed because authorized member still has ongoing massage order.")
+                if (expiredMassageOrders.length < massageOrders.length) {
+                    winstonLogger.info(`${baseMessage} Create massage order flow failed because user with id of ${memberUserId} still has ongoing massage order.`)
                     response.message = "Failed create massage order."
                     return {
                         createdMassageOrder: null,
@@ -118,12 +163,16 @@ export async function createMassageOrder(req, res, next) {
             }
 
             // Create massage order record.
+            const newMassageOrder = {
+                memberUserId: memberUserId,
+                massagePackageId: massagePackageId
+            }
             const { insert } = pgp.helpers
-            const createMassageOrderQuery = insert({ memberUserId: req.decodedPayload.id, massagePackageId: req.body.massagePackageId }, TblMassageOrderColumnSet) + " RETURNING *"
-            const createdMassageOrder = await t.one(createMassageOrderQuery)
+            const insertMassageOrderRecordQuery = insert(newMassageOrder, TblMassageOrderInsertColumnSet) + " RETURNING *"
+            const newMassageOrderEntity = await t.one(insertMassageOrderRecordQuery)
 
             return {
-                createdMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, createdMassageOrder),
+                createdMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, newMassageOrderEntity),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })

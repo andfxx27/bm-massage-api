@@ -91,10 +91,10 @@ export function isRoleMiddleware(roles) {
                 }
             }
 
-            // TODO Check for ban status.
+            // Check for ban status.
             const memberBan = await t.oneOrNone("SELECT * FROM ms_member_ban WHERE member_user_id = $<id> AND approval_status = 'BANNED' ORDER BY created_at DESC LIMIT 1", { id: req.decodedPayload.id })
-            const convertedMemberBan = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBan)
-            if (convertedMemberBan != null) {
+            if (memberBan != null) {
+                const convertedMemberBan = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBan)
                 const currentDate = new Date()
                 const currentDateUnix = currentDate.getTime()
                 const banLiftedDateUnix = convertedMemberBan.banLiftedAt.getTime()
@@ -107,10 +107,10 @@ export function isRoleMiddleware(roles) {
             }
 
             return {
-                statusCode: MiddlewareDomainErrGeneralStatusCode
+                statusCode: MiddlewareDomainGeneralSuccessStatusCode
             }
         })
-        if (result !== MiddlewareDomainGeneralSuccessStatusCode) {
+        if (result.statusCode !== MiddlewareDomainGeneralSuccessStatusCode) {
             response.statusCode = result.statusCode
             return res.status(httpStatusCodes.UNAUTHORIZED).json(response)
         }

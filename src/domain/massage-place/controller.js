@@ -364,20 +364,22 @@ export async function getMassagePlaces(req, res, next) {
                     `
                     break
                 case UserDomainRoleMember:
-                    // TODO Calculate current capacity calculation after implementing massage order feature
-
                     query = `
                         SELECT
                             mmp.id,
                             mmp.name,
-                            0 AS current_capacity,
+                            SUM(mmpkg.capacity * CASE mmo.order_status when 'PENDING' THEN 1 ELSE 0 END)::int AS current_capacity,
                             mmp.max_capacity,
                             mc."name" AS city_name,
                             mmp.address,
                             mmp.updated_at,
                             mmp.created_at
-                        FROM (select * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp JOIN ms_city mc ON mmp.city_id = mc.id
+                        FROM (select * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp 
+                            JOIN ms_city mc ON mmp.city_id = mc.id
+                            JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmp.id
+	                        JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
                         WHERE mmp.city_id::text LIKE ANY($<cityIds>)
+                        GROUP BY mmp.id, mmp.name, mmp.max_capacity, mc."name", mmp.address, mmp.updated_at, mmp.created_at
                     `
                     break
             }

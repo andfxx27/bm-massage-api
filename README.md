@@ -79,3 +79,5 @@ Notes: some role can have similar functions (such as view cities) but could have
 - [x] Add new massage package at specific massage place endpoint
 - [x] Add ban checking process in authorization middleware
 - [x] Adjust response message for failed cases across all endpoint
+- [ ] Finish up all TODO tag across all endpoint
+- [ ] Add swagger ui for API documentation
