@@ -211,15 +211,13 @@ export async function getOngoingMassageOrders(req, res, next) {
         const page = +(req.query.page ?? 1)
         const limit = +(req.query.limit ?? 15)
 
-        const { id: userId } = req.decodedPayload
+        const { id: userId, role: userRole } = req.decodedPayload
 
         // Main get ongoing massage orders flow.
         const result = await db.tx(async t => {
             // Get ongoing massage orders record.
             let query = ""
-
-            const role = req.decodedPayload.role
-            switch (role) {
+            switch (userRole) {
                 case UserDomainRoleAdmin:
                     query = `
                         SELECT
@@ -314,11 +312,11 @@ export async function getOngoingMassageOrderById(req, res, next) {
 
     try {
         // Retrieve path params.
-        const id = req.params.id
+        const massageOrderId = req.params.id
 
-        // Validate that massage order id needs to be a valid uuid.
-        if (!validate(id)) {
-            winstonLogger.info(baseMessage + " Get ongoing massage order by id flow failed because of invalid uuid id provided on the path param.")
+        // Validate massage order id to be a valid uuid.
+        if (!validate(massageOrderId)) {
+            winstonLogger.info(`${baseMessage} Get ongoing massage order by id flow failed because the massage order id is not a valid uuid.`)
 
             response.message = "Failed get ongoing massage order by id."
             response.statusCode = MassageOrderDomainFailedGetOngoingMassageOrderByIdErrInvalidPathParamMassageOrderId
@@ -328,18 +326,28 @@ export async function getOngoingMassageOrderById(req, res, next) {
 
         // Main get ongoing massage order by id flow.
         const result = await db.tx(async t => {
-            // Validate that the provided massage order id is valid.
-            const massageOrder = await t.oneOrNone("SELECT * FROM ms_massage_order WHERE id = $<id>", { id: id })
+            // Validate massage order id.
+            const massageOrder = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_massage_order
+                WHERE
+                    id = $<id>
+            `, {
+                id: massageOrderId
+            })
             if (massageOrder == null) {
-                winstonLogger.info(baseMessage + " Get ongoing massage order by id flow failed because the massage order is not found.")
+                winstonLogger.info(`${baseMessage} Get ongoing massage order by id flow failed because massage order with id of ${massageOrderId} is not found.`)
                 response.message = "Failed get ongoing massage order by id."
                 return {
-                    createdMassageOrder: null,
+                    ongoingMassageOrder: null,
                     statusCode: MassageOrderDomainFailedGetOngoingMassageOrderByIdErrMassageOrderNotFound
                 }
             }
 
-            const ongoingMassageOrder = await t.one(`
+            // Get ongoing massage order record by id.
+            const ongoingMassageOrderEntity = await t.one(`
                 SELECT
                     mmo.id AS massage_order_id,
                     mmpt."name" AS massage_package_type_name,
@@ -352,16 +360,17 @@ export async function getOngoingMassageOrderById(req, res, next) {
                     mmo.created_at AS massage_order_created_at
                 FROM
                     ms_massage_order mmo
-                        JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
-                        JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
-                        JOIN ms_user mu ON mu.id = mmo.member_user_id
-                WHERE mmo.id = $<massageOrderId>
+                    JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                    JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
+                    JOIN ms_user mu ON mu.id = mmo.member_user_id
+                WHERE
+                    mmo.id = $<massageOrderId>
             `, {
-                massageOrderId: id
+                massageOrderId: massageOrderId
             })
 
             return {
-                ongoingMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, ongoingMassageOrder),
+                ongoingMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, ongoingMassageOrderEntity),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })
