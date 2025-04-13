@@ -13,6 +13,15 @@ export const TblMassageOrderInsertColumnSet = new ColumnSet([
     table: "ms_massage_order"
 })
 
+export const TblMassageOrderUpdateOrderStatusColumnSet = new ColumnSet([
+    { name: "id", cnd: true },
+    { name: "order_status", prop: "orderStatus" },
+    { name: "admin_user_id", prop: "adminUserId" },
+    { name: "updated_at", cast: "timestamp", prop: "updatedAt" },
+], {
+    table: "ms_massage_order"
+})
+
 export const TblMassagePackageColumnSet = new ColumnSet([
     { name: "name", prop: "name" },
     { name: "capacity", prop: "capacity" },

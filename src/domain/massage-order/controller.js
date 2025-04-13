@@ -26,7 +26,8 @@ import {
 import {
     db,
     pgp,
-    TblMassageOrderInsertColumnSet
+    TblMassageOrderInsertColumnSet,
+    TblMassageOrderUpdateOrderStatusColumnSet
 } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
@@ -650,7 +651,7 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
 
         // Main update massage order's order status by id flow.
         const result = await db.tx(async t => {
-            // Validate that the massage order to be updated is from the massage place where the authorized admin works.
+            // Validate massage place admin eligibility to update the order status.
             const massageOrderEntity = await t.oneOrNone(`
                 SELECT
                     mmo.*
@@ -685,22 +686,17 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
                 }
             }
 
-            const updatedMassageOrderEntity = await t.one(`
-                UPDATE ms_massage_order
-                SET
-                    order_status = $<orderStatus>,
-                    admin_user_id = $<adminUserId>,
-                    updated_at = $<updatedAt>
-                WHERE
-                    id = $<massageOrderId>
-                RETURNING
-                    *
-            `, {
+            // Update massage order's status record.
+            const { update } = pgp.helpers
+            const updatedMassageOrder = {
                 orderStatus: orderStatus,
                 adminUserId: adminUserId,
                 updatedAt: new Date(),
-                massageOrderId: massageOrderId
-            })
+                id: massageOrderId
+            }
+            const updateCondition = pgp.as.format(" WHERE id = ${id} RETURNING *", updatedMassageOrder)
+            const updateMassageOrderRecordQuery = update(updatedMassageOrder, TblMassageOrderUpdateOrderStatusColumnSet) + updateCondition
+            const updatedMassageOrderEntity = await t.one(updateMassageOrderRecordQuery)
 
             return {
                 updatedMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassageOrderEntity),
