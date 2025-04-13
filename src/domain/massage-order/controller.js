@@ -409,6 +409,8 @@ export async function getMassageOrdersLogHistory(req, res, next) {
         const page = +(req.query.page ?? 1)
         const limit = +(req.query.limit ?? 15)
 
+        const { id: adminUserId } = req.decodedPayload
+
         // Main get massage orders log history flow.
         const result = await db.tx(async t => {
             // Get massage orders log history record.
@@ -428,12 +430,15 @@ export async function getMassageOrdersLogHistory(req, res, next) {
                     ms_massage_order mmo
                     JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
                     JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
+                    JOIN ms_massage_place_admin mmpa ON mmpa.massage_place_id = mmpkg.massage_place_id
                     JOIN ms_user mu ON mu.id = mmo.member_user_id
+                WHERE mmpa.admin_user_id = $<adminUserId>
                 LIMIT
                     $<limit>
                 OFFSET
                     $<offset>
             `, {
+                adminUserId: adminUserId,
                 limit: limit,
                 offset: (page - 1) * limit
             })
@@ -614,11 +619,14 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
 
     try {
         // Retrieve path params.
-        const id = req.params.id
+        const massageOrderId = req.params.id
+
+        const { orderStatus } = req.body
+        const { id: adminUserId } = req.decodedPayload
 
         // Validate that massage order id needs to be a valid uuid.
-        if (!validate(id)) {
-            winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because of invalid uuid id provided on the path param.")
+        if (!validate(massageOrderId)) {
+            winstonLogger.info(`${baseMessage} Update massage order's order status by id flow failed because the massage order id is not a valid uuid.`)
 
             response.message = "Failed update massage order's order status by id."
             response.statusCode = MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrInvalidPathParamMassageOrderId
@@ -629,7 +637,7 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Update massage order's order status by id flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed update massage order's order status by id."
             response.statusCode = MassageOrderDomainFailedUpdateMassageOrderOrderStatusByIdErrReqBodyValidation
@@ -643,24 +651,23 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
         // Main update massage order's order status by id flow.
         const result = await db.tx(async t => {
             // Validate that the massage order to be updated is from the massage place where the authorized admin works.
-            const massageOrder = await t.oneOrNone(`
+            const massageOrderEntity = await t.oneOrNone(`
                 SELECT
                     mmo.*
-                FROM 
+                FROM
                     ms_massage_place_admin mmpa
-                        JOIN ms_massage_place mmplc ON mmplc.id = mmpa.massage_place_id
-                        JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmplc.id
-                        JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
-                WHERE 
+                    JOIN ms_massage_place mmplc ON mmplc.id = mmpa.massage_place_id
+                    JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmplc.id
+                    JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
+                WHERE
                     mmpa.admin_user_id = $<adminUserId>
-                    AND
-                    mmo.id = $<massageOrderId>
+                    AND mmo.id = $<massageOrderId>
             `, {
-                adminUserId: req.decodedPayload.id,
-                massageOrderId: id
+                adminUserId: adminUserId,
+                massageOrderId: massageOrderId
             })
-            if (massageOrder == null) {
-                winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because the authorized admin might not work at the massage place where the order is created.")
+            if (massageOrderEntity == null) {
+                winstonLogger.info(`${baseMessage} Update massage order's order status by id flow failed because the authorized admin might not work at the massage place where the order is created.`)
                 response.message = "Failed update massage order's order status by id."
                 return {
                     updatedMassageOrder: null,
@@ -668,9 +675,9 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
                 }
             }
 
-            const convertedMassageOrder = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrder)
-            if (convertedMassageOrder.updatedAt != null) {
-                winstonLogger.info(baseMessage + " Update massage order's order status by id flow failed because the order status is already updated.")
+            const massageOrder = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrderEntity)
+            if (massageOrder.updatedAt != null) {
+                winstonLogger.info(`${baseMessage} Update massage order's order status by id flow failed because massage order status for order with id of ${massageOrderId} is already updated.`)
                 response.message = "Failed update massage order's order status by id."
                 return {
                     updatedMassageOrder: null,
@@ -678,23 +685,25 @@ export async function updateMassageOrderOrderStatusById(req, res, next) {
                 }
             }
 
-            const updatedMassageOrder = await t.one(`
+            const updatedMassageOrderEntity = await t.one(`
                 UPDATE ms_massage_order
-                SET 
+                SET
                     order_status = $<orderStatus>,
                     admin_user_id = $<adminUserId>,
                     updated_at = $<updatedAt>
-                WHERE id = $<massageOrderId>
-                RETURNING *
+                WHERE
+                    id = $<massageOrderId>
+                RETURNING
+                    *
             `, {
-                orderStatus: req.body.orderStatus,
-                adminUserId: req.decodedPayload.id,
+                orderStatus: orderStatus,
+                adminUserId: adminUserId,
                 updatedAt: new Date(),
-                massageOrderId: id
+                massageOrderId: massageOrderId
             })
 
             return {
-                updatedMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassageOrder),
+                updatedMassageOrder: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassageOrderEntity),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })
