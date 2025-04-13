@@ -35,7 +35,17 @@ export async function getMassagePackageTypes(req, res, next) {
 
         // Main get massage package types flow.
         const result = await db.tx(async t => {
-            const massagePackageTypes = await t.any("SELECT * FROM ms_massage_package_type LIMIT $<limit> OFFSET $<offset>", {
+            // Get massage package types record.
+            const massagePackageTypes = await t.any(`
+                SELECT
+                    *
+                FROM
+                    ms_massage_package_type
+                LIMIT
+                    $<limit>
+                OFFSET
+                    $<offset>
+            `, {
                 limit: limit,
                 offset: (page - 1) * limit
             })
