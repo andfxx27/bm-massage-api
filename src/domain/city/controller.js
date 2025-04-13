@@ -34,10 +34,26 @@ export async function getCities(req, res, next) {
 
         // Main get cities flow.
         const result = await db.tx(async t => {
-            return await t.many("SELECT * FROM ms_city LIMIT $<limit> OFFSET $<offset>", { limit: limit, offset: (page - 1) * limit })
+            // Get cities record.
+            const citiesEntity = await t.manyOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_city
+                LIMIT
+                    $<limit>
+                OFFSET
+                    $<offset>
+            `, { limit: limit, offset: (page - 1) * limit })
+
+            return {
+                cities: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, citiesEntity),
+                statusCode: CityDomainGeneralSuccessStatusCode
+            }
         })
 
-        response.result.cities = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, result)
+        response.statusCode = result.statusCode
+        response.result.cities = result.cities
 
         return res.status(httpStatusCodes.OK).json(response)
     } catch (error) {
