@@ -411,7 +411,8 @@ export async function getMassageOrdersLogHistory(req, res, next) {
 
         // Main get massage orders log history flow.
         const result = await db.tx(async t => {
-            const massageOrdersLogHistory = await t.any(`
+            // Get massage orders log history record.
+            const massageOrdersLogHistoryEntity = await t.manyOrNone(`
                 SELECT
                     mmo.id AS massage_order_id,
                     mu.email AS member_email,
@@ -425,17 +426,20 @@ export async function getMassageOrdersLogHistory(req, res, next) {
                     mmo.created_at AS massage_order_created_at
                 FROM
                     ms_massage_order mmo
-                        JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
-                        JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
-                        JOIN ms_user mu ON mu.id = mmo.member_user_id
-                LIMIT $<limit> OFFSET $<offset>
+                    JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                    JOIN ms_massage_package_type mmpt ON mmpt.id = mmpkg.massage_package_type_id
+                    JOIN ms_user mu ON mu.id = mmo.member_user_id
+                LIMIT
+                    $<limit>
+                OFFSET
+                    $<offset>
             `, {
                 limit: limit,
                 offset: (page - 1) * limit
             })
 
             return {
-                massageOrdersLogHistory: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrdersLogHistory),
+                massageOrdersLogHistory: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrdersLogHistoryEntity),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })
@@ -476,23 +480,29 @@ export async function getMassageOrderProfitReport(req, res, next) {
 
         // Main get massage order profit report flow.
         const result = await db.tx(async t => {
-            const massageOrderProfitReport = await t.any(`
+            // Get massage order profit report record.
+            const massageOrderProfitReportEntity = await t.manyOrNone(`
                 SELECT
                     mmo.created_at::date::text,
                     sum(mmpkg.price)::int AS profit
-                FROM 
+                FROM
                     ms_massage_order mmo
-                        JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
-                WHERE mmo.order_status = 'COMPLETED'
-                GROUP BY mmo.created_at::date
-                LIMIT $<limit> OFFSET $<offset>   
+                    JOIN ms_massage_package mmpkg ON mmpkg.id = mmo.massage_package_id
+                WHERE
+                    mmo.order_status = 'COMPLETED'
+                GROUP BY
+                    mmo.created_at::date
+                LIMIT
+                    $<limit>
+                OFFSET
+                    $<offset>
             `, {
                 limit: limit,
                 offset: (page - 1) * limit
             })
 
             return {
-                massageOrderProfitReport: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrderProfitReport),
+                massageOrderProfitReport: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massageOrderProfitReportEntity),
                 statusCode: MassageOrderDomainGeneralSuccessStatusCode
             }
         })

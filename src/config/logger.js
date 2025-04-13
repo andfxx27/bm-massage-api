@@ -24,4 +24,7 @@ export const winstonLogger = winston.createLogger({
 })
 
 // Initialize request logger middleware to log all request, where we use the winston logger stream.
-export const morganLoggerMiddleware = morgan(":method :url :status :res[content-length] - :response-time ms", { stream: winstonLogger.stream.write })
+morgan.token("body", req => {
+    return JSON.stringify(req.body) || "No request body"
+})
+export const morganLoggerMiddleware = morgan(":method :url :body :status :res[content-length] - :response-time ms", { stream: winstonLogger.stream.write })
