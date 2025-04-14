@@ -18,3 +18,4 @@ export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceI
 export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceAndAdminUserId = "1038"
 export const MassagePlaceDomainFailedCreateMassagePackageErrExceedsMaxCapacity = "1039"
 export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePackageTypeId = "1040"
+export const MassagePlaceDomainFailedCreateMassagePlaceErrCityNotFound = "1041"

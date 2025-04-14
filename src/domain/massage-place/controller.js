@@ -9,6 +9,7 @@ import {
     MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceAndAdminUserId,
     MassagePlaceDomainFailedCreateMassagePackageErrInvalidMassagePlaceId,
     MassagePlaceDomainFailedCreateMassagePackageErrReqBodyValidation,
+    MassagePlaceDomainFailedCreateMassagePlaceErrCityNotFound,
     MassagePlaceDomainFailedCreateMassagePlaceErrDuplicateAdminNames,
     MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists,
     MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass,
@@ -37,8 +38,9 @@ import {
     pgp,
     TblMassagePackageColumnSet,
     TblMassagePlaceAdminColumnSet,
-    TblMassagePlaceColumnSet,
-    TblUserColumnSet,
+    TblMassagePlaceAdminInsertColumnSet,
+    TblMassagePlaceInsertColumnSet,
+    TblUserInsertColumnSet,
     TblUserUpdateColumnSet
 } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
@@ -72,7 +74,7 @@ export async function createMassagePlace(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Create massage place flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Create massage place flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed create massage place."
             response.statusCode = MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation
@@ -83,11 +85,19 @@ export async function createMassagePlace(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
+        const {
+            name,
+            address,
+            cityId,
+            adminNames
+        } = req.body
+        const { id: ownerUserId } = req.decodedPayload
+
         // Main create massage place flow.
         const result = await db.tx(async t => {
             // Check if provided admin names contain duplicates.
             if (new Set(req.body.adminNames).size !== req.body.adminNames.length) {
-                winstonLogger.info(baseMessage + " Create massage place flow failed because there is a duplicate admin names.")
+                winstonLogger.info(`${baseMessage} Create massage place flow failed because there is a duplicate admin names.`)
                 response.message = "Failed create massage place."
                 return {
                     createdMassagePlace: null,
@@ -98,7 +108,7 @@ export async function createMassagePlace(req, res, next) {
             // Check if default admin password exists.
             const defaultAdminPassword = process.env.MASSAGE_PLACE_ADMIN_DEFAULT_PASS
             if (!defaultAdminPassword) {
-                winstonLogger.info(baseMessage + " Create massage place flow failed because there is no default admin pass found.")
+                winstonLogger.info(`${baseMessage} Create massage place flow failed because there is no default admin pass found.`)
                 response.message = "Failed create massage place."
                 return {
                     createdMassagePlace: null,
@@ -106,19 +116,43 @@ export async function createMassagePlace(req, res, next) {
                 }
             }
 
-            // Check if provided massage place with same name, address, and city id already exists.
-            const existingMassagePlace = await t.oneOrNone(`
+            // Validate city id.
+            const cityEntity = await t.oneOrNone(`
                 SELECT
                     *
-                FROM ms_massage_place
-                WHERE name = $<name> AND address = $<address> and city_id = $<cityId>  
+                FROM
+                    ms_city
+                WHERE
+                    id = $<cityId>
             `, {
-                name: req.body.name,
-                address: req.body.address,
-                cityId: req.body.cityId
+                cityId: cityId
             })
-            if (existingMassagePlace != null) {
-                winstonLogger.info(baseMessage + " Create massage place flow failed because there is an existing place with same name, address, and city id.")
+            if (cityEntity == null) {
+                winstonLogger.info(`${baseMessage} Create massage place flow failed because the city with id of ${cityId} is not found.`)
+                response.message = "Failed create massage place."
+                return {
+                    createdMassagePlace: null,
+                    statusCode: MassagePlaceDomainFailedCreateMassagePlaceErrCityNotFound
+                }
+            }
+
+            // Check if provided massage place with same name, address, and city id already exists.
+            const existingMassagePlaceEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_massage_place
+                WHERE
+                    name = $<name>
+                    AND address = $<address>
+                    AND city_id = $<cityId> 
+            `, {
+                name: name,
+                address: address,
+                cityId: cityId
+            })
+            if (existingMassagePlaceEntity != null) {
+                winstonLogger.info(`${baseMessage} Create massage place flow failed because there is an existing place with same name, address, and city id.`)
                 response.message = "Failed create massage place."
                 return {
                     createdMassagePlace: null,
@@ -128,7 +162,7 @@ export async function createMassagePlace(req, res, next) {
 
             // Create admin user record.
             const hashedDefaultAdminPassword = await bcrypt.hash(defaultAdminPassword, 10)
-            const newAdmins = req.body.adminNames.map((fullname, i) => {
+            const newAdmins = adminNames.map((fullname, i) => {
                 const username = `${req.body.name.replace(/ /g, "")}${fullname.replace(/ /g, "")}${i}`.toLowerCase()
                 return {
                     fullname: fullname,
@@ -141,17 +175,15 @@ export async function createMassagePlace(req, res, next) {
             })
 
             const { insert } = pgp.helpers
-
-            const createAdminUserRecordQuery = insert(newAdmins, TblUserColumnSet) + " RETURNING *"
+            const createAdminUserRecordQuery = insert(newAdmins, TblUserInsertColumnSet) + " RETURNING *"
 
             const createdAdminUsers = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(createAdminUserRecordQuery))
 
             // Create massage place record.
             const newMassagePlace = { ...req.body }
-            newMassagePlace.ownerUserId = req.decodedPayload.id
+            newMassagePlace.ownerUserId = ownerUserId
             delete (newMassagePlace.adminNames)
-
-            const createMassagePlaceRecordQuery = insert(newMassagePlace, TblMassagePlaceColumnSet) + " RETURNING *"
+            const createMassagePlaceRecordQuery = insert(newMassagePlace, TblMassagePlaceInsertColumnSet) + " RETURNING *"
 
             const createdMassagePlace = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.one(createMassagePlaceRecordQuery))
 
@@ -163,7 +195,7 @@ export async function createMassagePlace(req, res, next) {
                 }
             })
 
-            const createMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminColumnSet) + " RETURNING *"
+            const createMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminInsertColumnSet) + " RETURNING *"
 
             const createdMassagePlaceAdmins = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(createMassagePlaceAdminsRecordQuery))
 

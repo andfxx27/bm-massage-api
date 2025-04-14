@@ -43,6 +43,16 @@ export const TblMassagePlaceColumnSet = new ColumnSet([
     table: "ms_massage_place"
 })
 
+export const TblMassagePlaceInsertColumnSet = new ColumnSet([
+    { name: "name", prop: "name" },
+    { name: "max_capacity", prop: "maxCapacity" },
+    { name: "address", prop: "address" },
+    { name: "owner_user_id", prop: "ownerUserId" },
+    { name: "city_id", prop: "cityId" }
+], {
+    table: "ms_massage_place"
+})
+
 export const TblMassagePlaceAdminColumnSet = new ColumnSet([
     { name: "admin_user_id", prop: "adminUserId" },
     { name: "massage_place_id", prop: "massagePlaceId" }
@@ -50,7 +60,25 @@ export const TblMassagePlaceAdminColumnSet = new ColumnSet([
     table: "ms_massage_place_admin"
 })
 
+export const TblMassagePlaceAdminInsertColumnSet = new ColumnSet([
+    { name: "admin_user_id", prop: "adminUserId" },
+    { name: "massage_place_id", prop: "massagePlaceId" }
+], {
+    table: "ms_massage_place_admin"
+})
+
 export const TblUserColumnSet = new ColumnSet([
+    { name: "fullname", prop: "fullname" },
+    { name: "gender", prop: "gender" },
+    { name: "username", prop: "username" },
+    { name: "email", prop: "email" },
+    { name: "password", prop: "password" },
+    { name: "role", prop: "role" }
+], {
+    table: "ms_user"
+})
+
+export const TblUserInsertColumnSet = new ColumnSet([
     { name: "fullname", prop: "fullname" },
     { name: "gender", prop: "gender" },
     { name: "username", prop: "username" },
