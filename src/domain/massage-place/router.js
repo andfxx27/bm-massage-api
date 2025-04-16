@@ -35,7 +35,6 @@ router.post(
     body("name", `Field "name" must be a non-empty alphabet value.`).notEmpty().isAlpha("en-US", { ignore: [" "] }),
     body("capacity", `Field "capacity" must be valid integer value.`).notEmpty().isNumeric(),
     body("price", `Field "price" must be a valid integer value.`).notEmpty().isNumeric(),
-    body("massagePlaceId", `Field "massagePlaceId" must be a valid uuid value.`).notEmpty().isUUID("4"),
     body("massagePackageTypeId", `Field "massagePackageTypeId" must be a valid uuid value.`).notEmpty().isUUID("4"),
     isRoleMiddleware([UserDomainRoleAdmin]),
     createMassagePackage

@@ -22,7 +22,7 @@ export const TblMassageOrderUpdateOrderStatusColumnSet = new ColumnSet([
     table: "ms_massage_order"
 })
 
-export const TblMassagePackageColumnSet = new ColumnSet([
+export const TblMassagePackageInsertColumnSet = new ColumnSet([
     { name: "name", prop: "name" },
     { name: "capacity", prop: "capacity" },
     { name: "price", prop: "price" },
@@ -31,16 +31,6 @@ export const TblMassagePackageColumnSet = new ColumnSet([
     { name: "massage_package_type_id", prop: "massagePackageTypeId" }
 ], {
     table: "ms_massage_package"
-})
-
-export const TblMassagePlaceColumnSet = new ColumnSet([
-    { name: "name", prop: "name" },
-    { name: "max_capacity", prop: "maxCapacity" },
-    { name: "address", prop: "address" },
-    { name: "owner_user_id", prop: "ownerUserId" },
-    { name: "city_id", prop: "cityId" }
-], {
-    table: "ms_massage_place"
 })
 
 export const TblMassagePlaceInsertColumnSet = new ColumnSet([
