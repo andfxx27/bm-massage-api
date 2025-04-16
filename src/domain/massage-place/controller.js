@@ -416,10 +416,10 @@ export async function getMassagePlaces(req, res, next) {
             return res.status(httpStatusCodes.OK).json(response)
         }
 
+        const { role } = req.decodedPayload
+
         // Main get massage places flow.
         const result = await db.tx(async t => {
-            const role = req.decodedPayload.role
-
             let query = ""
 
             switch (role) {
@@ -433,10 +433,28 @@ export async function getMassagePlaces(req, res, next) {
                             mmp.address,
                             mmp.updated_at,
                             mmp.created_at
-                        FROM (SELECT * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp JOIN (
-                            SELECT COUNT(admin_user_id) AS admin_count, massage_place_id FROM ms_massage_place_admin GROUP BY massage_place_id
-                        ) mmpa ON mmpa.massage_place_id  = mmp.id
-                        WHERE mmp.city_id::text LIKE ANY($<cityIds>)
+                        FROM
+                            (
+                                SELECT
+                                    *
+                                FROM
+                                    ms_massage_place
+                                LIMIT
+                                    $<limit>
+                                OFFSET
+                                    $<offset>
+                            ) mmp
+                            JOIN (
+                                SELECT
+                                    COUNT(admin_user_id) AS admin_count,
+                                    massage_place_id
+                                FROM
+                                    ms_massage_place_admin
+                                GROUP BY
+                                    massage_place_id
+                            ) mmpa ON mmpa.massage_place_id = mmp.id
+                        WHERE
+                            mmp.city_id::text LIKE ANY ($<cityIds>)
                     `
                     break
                 case UserDomainRoleMember:
@@ -444,30 +462,56 @@ export async function getMassagePlaces(req, res, next) {
                         SELECT
                             mmp.id,
                             mmp.name,
-                            SUM(mmpkg.capacity * CASE mmo.order_status when 'PENDING' THEN 1 ELSE 0 END)::int AS current_capacity,
+                            COALESCE(
+                                SUM(
+                                    mmpkg.capacity * CASE mmo.order_status
+                                        WHEN 'PENDING' THEN 1
+                                        ELSE 0
+                                    END
+                                )::int,
+                                0
+                            ) AS current_capacity,
                             mmp.max_capacity,
                             mc."name" AS city_name,
                             mmp.address,
                             mmp.updated_at,
                             mmp.created_at
-                        FROM (select * FROM ms_massage_place LIMIT $<limit> OFFSET $<offset>) mmp 
+                        FROM
+                            (
+                                SELECT
+                                    *
+                                FROM
+                                    ms_massage_place
+                                LIMIT
+                                    $<limit>
+                                OFFSET
+                                    $<offset>
+                            ) mmp
+                            LEFT JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmp.id
+                            LEFT JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
                             JOIN ms_city mc ON mmp.city_id = mc.id
-                            JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmp.id
-	                        JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
-                        WHERE mmp.city_id::text LIKE ANY($<cityIds>)
-                        GROUP BY mmp.id, mmp.name, mmp.max_capacity, mc."name", mmp.address, mmp.updated_at, mmp.created_at
+                        WHERE
+                            mmp.city_id::text LIKE ANY ($<cityIds>)
+                        GROUP BY
+                            mmp.id,
+                            mmp.name,
+                            mmp.max_capacity,
+                            mc."name",
+                            mmp.address,
+                            mmp.updated_at,
+                            mmp.created_at
                     `
                     break
             }
 
-            const massagePlaces = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(query, {
+            const massagePlaces = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.manyOrNone(query, {
                 limit: limit,
                 offset: (page - 1) * limit,
                 cityIds: cityIds
             }))
 
             return {
-                massagePlaces: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlaces),
+                massagePlaces: massagePlaces,
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }
         })
