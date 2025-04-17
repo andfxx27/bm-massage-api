@@ -31,7 +31,7 @@ import {
     db,
     pgp,
     TblMemberBanColumnSet,
-    TblUserColumnSet
+    TblUserInsertColumnSet
 } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
@@ -65,7 +65,7 @@ export async function signUp(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Sign up flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Sign up flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed sign up."
             response.statusCode = UserDomainFailedSignUpErrReqBodyValidation
@@ -87,7 +87,7 @@ export async function signUp(req, res, next) {
             // Insert to database.
             const { insert } = pgp.helpers
             const values = newUser
-            const query = insert(values, TblUserColumnSet) + " RETURNING *"
+            const query = insert(values, TblUserInsertColumnSet) + " RETURNING *"
             return await t.one(query)
         })
 
@@ -100,11 +100,11 @@ export async function signUp(req, res, next) {
         response.message = "Failed sign up."
 
         if (error.code && error.code == "23505") {
-            winstonLogger.info(baseMessage + " Sign up flow failed because an error occurred when creating user database record. Error = " + error.message + ".")
+            winstonLogger.info(`${baseMessage} Sign up flow failed because an error occurred when creating user database record.`)
             response.statusCode = UserDomainFailedSignUpErrDuplicateDatabaseRecordUserTable
             return res.status(httpStatusCodes.OK).json(response)
         } else {
-            winstonLogger.info(baseMessage + " Sign up flow failed because of an unhandled error. Passing it to default error handler middleware...")
+            winstonLogger.info(`${baseMessage} Sign up flow failed because of an unhandled error. Passing it to default error handler middleware.`)
         }
 
         return next(error)
