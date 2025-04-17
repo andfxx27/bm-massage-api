@@ -20,6 +20,7 @@ import {
     MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedGetMassagePlacesErrInvalidCityIdsQueryParam,
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray,
+    MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidPathParamMassagePlaceId,
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrNoDefaultAdminPass,
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAndAddress,
@@ -41,9 +42,9 @@ import {
     db,
     pgp,
     TblMassagePackageInsertColumnSet,
-    TblMassagePlaceAdminColumnSet,
     TblMassagePlaceAdminInsertColumnSet,
     TblMassagePlaceInsertColumnSet,
+    TblUserAdminInsertColumnSet,
     TblUserInsertColumnSet,
     TblUserUpdateColumnSet
 } from "#root/src/config/database.js"
@@ -559,7 +560,7 @@ export async function getMassagePlaceById(req, res, next) {
             response.message = "Failed get massage place by id."
             response.statusCode = MassagePlaceDomainFailedGetMassagePlaceByIdErrInvalidPathParamMassagePlaceId
 
-            return res.status(httpStatusCodes.OK).json(response)
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
         const { role } = req.decodedPayload
@@ -710,6 +711,19 @@ export async function updateMassagePlaceById(req, res, next) {
     }
 
     try {
+        // Retrieve path params.
+        const massagePlaceId = req.params.id
+
+        // Validate massage place id to be a valid uuid.
+        if (!validate(massagePlaceId)) {
+            winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the massage place id is not a valid uuid.`)
+
+            response.message = "Failed update massage place by id."
+            response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidPathParamMassagePlaceId
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
+
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
@@ -729,19 +743,6 @@ export async function updateMassagePlaceById(req, res, next) {
             maxCapacity,
             address
         } = req.body
-
-        // Retrieve path params.
-        const massagePlaceId = req.params.id
-
-        // Validate massage place id to be a valid uuid.
-        if (!validate(massagePlaceId)) {
-            winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the massage place id is not a valid uuid.`)
-
-            response.message = "Failed update massage place by id."
-            response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidPathParamMassagePlaceId
-
-            return res.status(httpStatusCodes.OK).json(response)
-        }
 
         // Main update massage place by id flow.
         const result = await db.tx(async t => {
@@ -855,10 +856,23 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
     }
 
     try {
+        // Retrieve path params.
+        const massagePlaceId = req.params.id
+
+        // Validate massage place id.
+        if (!validate(massagePlaceId)) {
+            winstonLogger.info(`${baseMessage} Update massage place admins by id flow failed because the massage place id is not a valid uuid.`)
+
+            response.message = "Failed get massage place by id."
+            response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidPathParamMassagePlaceId
+
+            return res.status(httpStatusCodes.BAD_REQUEST).json(response)
+        }
+
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Update massage place admins by id flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed update massage place admins by id."
             response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation
@@ -869,15 +883,14 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
-        // Retrieve path params.
-        const id = req.params.id
+        const { admins } = req.body
 
         // Main update massage place admins flow.
         const result = await db.tx(async t => {
             // Make sure that default admin password exists in the .env.
             const defaultAdminPassword = process.env.MASSAGE_PLACE_ADMIN_DEFAULT_PASS
             if (!defaultAdminPassword) {
-                winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because default admin pass is not found.")
+                winstonLogger.info(`${baseMessage} Update massage place admins by id flow failed because default admin pass is not found.`)
                 response.message = "Failed update massage place admins by id."
                 return {
                     updatedMassagePlace: null,
@@ -890,7 +903,7 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
 
             // Validate admins array from the request body.
             let validAdmins = true
-            req.body.admins.forEach((admin) => {
+            admins.forEach((admin) => {
                 const { id, fullname, username, isActive } = admin
                 if (!fullname || !username || !isActive) {
                     validAdmins = false
@@ -898,7 +911,7 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
             })
 
             if (!validAdmins) {
-                winstonLogger.info(baseMessage + " Update massage place admins by id flow failed because of invalid admins object array.")
+                winstonLogger.info(`${baseMessage} Update massage place admins by id flow failed because of invalid admins object array.`)
                 response.message = "Failed update massage place admins by id."
                 return {
                     updatedMassagePlace: null,
@@ -907,12 +920,12 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
             }
 
             // Split admin record with empty and non-empty id.
-            const existingAdmins = req.body.admins.filter((admin) => admin.id).map((admin) => {
+            const existingAdmins = admins.filter((admin) => admin.id).map((admin) => {
                 const mappedAdmin = { ...admin }
                 mappedAdmin.updatedAt = new Date()
                 return mappedAdmin
             })
-            const newAdmins = req.body.admins.filter((admin) => !admin.id).map((admin) => {
+            const newAdmins = admins.filter((admin) => !admin.id).map((admin) => {
                 const mappedAdmin = { ...admin }
                 delete (mappedAdmin.id)
                 mappedAdmin.gender = UserDomainGenderMale
@@ -934,19 +947,8 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
             // Create new user and massage place admin record for the remaining new admins.
             if (newAdmins.length > 0) {
                 const { insert } = pgp.helpers
-                const tempColumnSet = new pgp.helpers.ColumnSet([
-                    { name: "fullname", prop: "fullname" },
-                    { name: "gender", prop: "gender" },
-                    { name: "username", prop: "username" },
-                    { name: "email", prop: "email" },
-                    { name: "password", prop: "password" },
-                    { name: "role", prop: "role" },
-                    { name: "is_active", prop: "isActive" }
-                ], {
-                    table: "ms_user"
-                })
-                const createNewAdminUserRecordQuery = insert(newAdmins, tempColumnSet) + " RETURNING *"
-                const createdNewAdminUsers = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(createNewAdminUserRecordQuery))
+                const insertNewAdminUserRecordQuery = insert(newAdmins, TblUserAdminInsertColumnSet) + " RETURNING *"
+                const createdNewAdminUsers = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(insertNewAdminUserRecordQuery))
 
                 const newMassagePlaceAdmins = createdNewAdminUsers.map((user) => {
                     return {
@@ -955,8 +957,8 @@ export async function updateMassagePlaceAdminsById(req, res, next) {
                     }
                 })
 
-                const createMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminColumnSet)
-                await t.none(createMassagePlaceAdminsRecordQuery)
+                const insertMassagePlaceAdminsRecordQuery = insert(newMassagePlaceAdmins, TblMassagePlaceAdminInsertColumnSet)
+                await t.none(insertMassagePlaceAdminsRecordQuery)
 
                 updatedMassagePlaceAdmins.push(...createdNewAdminUsers)
             }

@@ -59,7 +59,7 @@ router.patch(
 )
 router.patch(
     "/:id/admins",
-    body("admins", `Field "admins" must be a valid array of object consisting of id, fullname, username, and isActive.`).notEmpty().isArray({ min: 1, max: 10 }),
+    body("admins", `Field "admins" must be a valid array of object consisting of id (mandatory if new admin), fullname, username, and isActive.`).notEmpty().isArray({ min: 1, max: 10 }),
     isRoleMiddleware([UserDomainRoleOwner]),
     updateMassagePlaceAdminsById
 )
