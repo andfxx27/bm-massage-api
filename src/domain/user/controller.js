@@ -458,13 +458,25 @@ export async function getMemberBanApprovalRequests(req, res, next) {
 
         // Main get member ban approval requests flow.
         const result = await db.tx(async t => {
-            const memberBanApprovalRequests = await t.any("SELECT * FROM ms_member_ban WHERE approval_status = 'PENDING' LIMIT $<limit> OFFSET $<offset>", {
+            // Get member ban approval request record.
+            const memberBanApprovalRequestsEntity = await t.manyOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_member_ban
+                WHERE
+                    approval_status = 'PENDING'
+                LIMIT
+                    $<limit>
+                OFFSET
+                    $<offset>
+            `, {
                 limit: limit,
                 offset: (page - 1) * limit
             })
 
             return {
-                memberBanApprovalRequests: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBanApprovalRequests),
+                memberBanApprovalRequests: await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBanApprovalRequestsEntity),
                 statusCode: UserDomainGeneralSuccessStatusCode
             }
         })
