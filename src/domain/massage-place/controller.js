@@ -16,6 +16,7 @@ import {
     MassagePlaceDomainFailedCreateMassagePlaceErrExistingPlaceWithSameNameAndAddressAndCityIdAlreadyExists,
     MassagePlaceDomainFailedCreateMassagePlaceErrNoDefaultAdminPass,
     MassagePlaceDomainFailedCreateMassagePlaceErrReqBodyValidation,
+    MassagePlaceDomainFailedGetMassagePlaceByIdErrInvalidPathParamMassagePlaceId,
     MassagePlaceDomainFailedGetMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedGetMassagePlacesErrInvalidCityIdsQueryParam,
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrInvalidAdminObjectArray,
@@ -420,6 +421,7 @@ export async function getMassagePlaces(req, res, next) {
 
         // Main get massage places flow.
         const result = await db.tx(async t => {
+            // Get massage places record.
             let query = ""
 
             switch (role) {
@@ -547,12 +549,23 @@ export async function getMassagePlaceById(req, res, next) {
 
     try {
         // Retrieve path params.
-        const id = req.params.id
+        const massagePlaceId = req.params.id
+
+        // Validate massage place id to be a valid uuid.
+        if (!validate(massagePlaceId)) {
+            winstonLogger.info(`${baseMessage} Get massage place by id flow failed because the massage place id is not a valid uuid.`)
+
+            response.message = "Failed get massage place by id."
+            response.statusCode = MassagePlaceDomainFailedGetMassagePlaceByIdErrInvalidPathParamMassagePlaceId
+
+            return res.status(httpStatusCodes.OK).json(response)
+        }
+
+        const { role } = req.decodedPayload
 
         // Main get massage place by id flow.
         const result = await db.tx(async t => {
-            const role = req.decodedPayload.role
-
+            // Get massage place by id record.
             let massagePlaceHeaderQuery = ""
             let massagePlaceDetailQuery = ""
 
@@ -567,10 +580,19 @@ export async function getMassagePlaceById(req, res, next) {
                             mmp.address,
                             mmp.updated_at,
                             mmp.created_at
-                        FROM ms_massage_place mmp JOIN (
-                            SELECT COUNT(admin_user_id) AS admin_count, massage_place_id FROM ms_massage_place_admin GROUP BY massage_place_id
-                        ) mmpa ON mmpa.massage_place_id  = mmp.id
-                        WHERE mmp.id = $<id>
+                        FROM
+                            ms_massage_place mmp
+                            JOIN (
+                                SELECT
+                                    COUNT(admin_user_id) AS admin_count,
+                                    massage_place_id
+                                FROM
+                                    ms_massage_place_admin
+                                GROUP BY
+                                    massage_place_id
+                            ) mmpa ON mmpa.massage_place_id = mmp.id
+                        WHERE
+                            mmp.id = $<id>
                     `
 
                     massagePlaceDetailQuery = `
@@ -580,8 +602,11 @@ export async function getMassagePlaceById(req, res, next) {
                             mu.username,
                             mu.is_active,
                             mu.created_at
-                        FROM ms_user mu JOIN ms_massage_place_admin mmpa ON mmpa.admin_user_id = mu.id
-                        WHERE mmpa.massage_place_id = $<id>
+                        FROM
+                            ms_user mu
+                            JOIN ms_massage_place_admin mmpa ON mmpa.admin_user_id = mu.id
+                        WHERE
+                            mmpa.massage_place_id = $<id>
                     `
                     break
                 case UserDomainRoleMember:
@@ -589,29 +614,52 @@ export async function getMassagePlaceById(req, res, next) {
                         SELECT
                             mmp.id,
                             mmp.name,
-                            0 AS current_capacity,
+                            COALESCE(
+                                SUM(
+                                    mmpkg.capacity * CASE mmo.order_status
+                                        WHEN 'PENDING' THEN 1
+                                        ELSE 0
+                                    END
+                                )::int,
+                                0
+                            ) AS current_capacity,
                             mmp.max_capacity,
                             mc."name" AS city_name,
                             mmp.address,
                             mmp.updated_at,
                             mmp.created_at
-                        FROM ms_massage_place mmp JOIN ms_city mc ON mmp.city_id = mc.id
-                        WHERE mmp.id = $<id>
+                        FROM 
+                            ms_massage_place mmp
+                            JOIN ms_massage_package mmpkg ON mmpkg.massage_place_id = mmp.id
+                            JOIN ms_massage_order mmo ON mmo.massage_package_id = mmpkg.id
+                            JOIN ms_city mc ON mmp.city_id = mc.id
+                        WHERE
+                            mmp.id = $<id>
+                        GROUP BY
+                            mmp.id,
+                            mmp.name,
+                            mmp.max_capacity,
+                            mc."name",
+                            mmp.address,
+                            mmp.updated_at,
+                            mmp.created_at
                     `
 
                     massagePlaceDetailQuery = `
                         SELECT
                             *
-                        FROM ms_massage_package
-                        WHERE massage_place_id = $<id>
+                        FROM
+                            ms_massage_package
+                        WHERE
+                            massage_place_id = $<id>
                     `
                     break
             }
 
             // Check if the provided massage place id is valid.
-            const massagePlaceHeader = await t.oneOrNone(massagePlaceHeaderQuery, { id: id })
-            if (massagePlaceHeader == null) {
-                winstonLogger.info(baseMessage + " Get massage place by id flow failed because massage place with provided id doesn't exists.")
+            const massagePlaceHeaderEntity = await t.oneOrNone(massagePlaceHeaderQuery, { id: massagePlaceId })
+            if (massagePlaceHeaderEntity == null) {
+                winstonLogger.info(`${baseMessage} Get massage place by id flow failed because massage place with id of ${massagePlaceId} is not found.`)
                 response.message = "Failed get massage place by id."
                 return {
                     massagePlace: null,
@@ -619,12 +667,12 @@ export async function getMassagePlaceById(req, res, next) {
                 }
             }
 
-            const convertedMassagePlaceHeader = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlaceHeader)
-            const massagePlaceDetail = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.any(massagePlaceDetailQuery, { id: id }))
+            const massagePlaceHeader = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlaceHeaderEntity)
+            const massagePlaceDetail = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.manyOrNone(massagePlaceDetailQuery, { id: massagePlaceId }))
 
             return {
                 massagePlace: {
-                    ...convertedMassagePlaceHeader,
+                    ...massagePlaceHeader,
                     massagePlaceDetail: massagePlaceDetail
                 },
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode

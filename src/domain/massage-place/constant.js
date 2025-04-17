@@ -20,3 +20,4 @@ export const MassagePlaceDomainFailedCreateMassagePackageErrExceedsMaxCapacity =
 export const MassagePlaceDomainFailedCreateMassagePackageErrMassagePackageTypeNotFound = "1040"
 export const MassagePlaceDomainFailedCreateMassagePlaceErrCityNotFound = "1041"
 export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidPathParamMassagePlaceId = "1042"
+export const MassagePlaceDomainFailedGetMassagePlaceByIdErrInvalidPathParamMassagePlaceId = "1043"
