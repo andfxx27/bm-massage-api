@@ -21,3 +21,4 @@ export const MassagePlaceDomainFailedCreateMassagePackageErrMassagePackageTypeNo
 export const MassagePlaceDomainFailedCreateMassagePlaceErrCityNotFound = "1041"
 export const MassagePlaceDomainFailedCreateMassagePackageErrInvalidPathParamMassagePlaceId = "1042"
 export const MassagePlaceDomainFailedGetMassagePlaceByIdErrInvalidPathParamMassagePlaceId = "1043"
+export const MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidPathParamMassagePlaceId = "1044"

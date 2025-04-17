@@ -24,6 +24,7 @@ import {
     MassagePlaceDomainFailedUpdateMassagePlaceAdminsByIdErrReqBodyValidation,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrConflictingNameAndAddress,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidMaxCapacityValue,
+    MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidPathParamMassagePlaceId,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrMassagePlaceNotFound,
     MassagePlaceDomainFailedUpdateMassagePlaceByIdErrReqBodyValidation,
     MassagePlaceDomainGeneralSuccessStatusCode
@@ -712,7 +713,7 @@ export async function updateMassagePlaceById(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Update massage place by id flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Update massage place by id flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed update massage place by id."
             response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceByIdErrReqBodyValidation
@@ -723,15 +724,40 @@ export async function updateMassagePlaceById(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
+        const {
+            name,
+            maxCapacity,
+            address
+        } = req.body
+
         // Retrieve path params.
-        const id = req.params.id
+        const massagePlaceId = req.params.id
+
+        // Validate massage place id to be a valid uuid.
+        if (!validate(massagePlaceId)) {
+            winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the massage place id is not a valid uuid.`)
+
+            response.message = "Failed update massage place by id."
+            response.statusCode = MassagePlaceDomainFailedUpdateMassagePlaceByIdErrInvalidPathParamMassagePlaceId
+
+            return res.status(httpStatusCodes.OK).json(response)
+        }
 
         // Main update massage place by id flow.
         const result = await db.tx(async t => {
-            // Check if the provided massage place id is valid.
-            const massagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE id = $<id>", { id: id })
-            if (massagePlace == null) {
-                winstonLogger.info(baseMessage + " Update massage place by id flow failed because massage place with provided id doesn't exists.")
+            // Validate massage place id
+            const massagePlaceEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_massage_place
+                WHERE
+                    id = $<id>
+            `, {
+                id: massagePlaceId
+            })
+            if (massagePlaceEntity == null) {
+                winstonLogger.info(`${baseMessage} Update massage place by id flow failed because massage place with id of ${massagePlaceId} is not found.`)
                 response.message = "Failed update massage place by id."
                 return {
                     updatedMassagePlace: null,
@@ -739,11 +765,11 @@ export async function updateMassagePlaceById(req, res, next) {
                 }
             }
 
-            const convertedMassagePlace = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlace)
+            const massagePlace = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, massagePlaceEntity)
 
             // Check if updated max capacity is fewer than current max capacity.
-            if (convertedMassagePlace.maxCapacity < req.body.maxCapacity) {
-                winstonLogger.info(baseMessage + " Update massage place by id flow failed because the updated max capacity is fewer than current max capacity.")
+            if (maxCapacity < massagePlaceEntity.maxCapacity) {
+                winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the updated max capacity is fewer than current max capacity.`)
                 response.message = "Failed update massage place by id."
                 return {
                     updatedMassagePlace: null,
@@ -752,9 +778,20 @@ export async function updateMassagePlaceById(req, res, next) {
             }
 
             // Check whether the new name and address is not conflicting with another place with different id.
-            const existingMassagePlace = await t.oneOrNone("SELECT * FROM ms_massage_place WHERE name = $<name> and address = $<address>", { name: req.body.name, address: req.body.address })
-            if (existingMassagePlace != null && existingMassagePlace.id !== id) {
-                winstonLogger.info(baseMessage + " Update massage place by id flow failed because the name and address conflicts with other massage place with id = " + existingMassagePlace.id)
+            const existingMassagePlaceEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                    FROM
+                    ms_massage_place
+                WHERE
+                    name = $<name>
+                    AND address = $<address>
+                    `, {
+                name: name,
+                address: address
+            })
+            if (existingMassagePlaceEntity != null && existingMassagePlaceEntity.id !== massagePlaceId) {
+                winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the name and address conflicts with other massage place with id of ${existingMassagePlace.id}`)
                 response.message = "Failed update massage place by id."
                 return {
                     updatedMassagePlace: null,
@@ -763,25 +800,27 @@ export async function updateMassagePlaceById(req, res, next) {
             }
 
             // Update the massage place record.
-            const updatedMassagePlace = await t.one(`
+            const updatedMassagePlaceEntity = await t.one(`
                 UPDATE ms_massage_place
-                SET 
+                SET
                     name = $<name>,
                     max_capacity = $<maxCapacity>,
                     address = $<address>,
                     updated_at = $<updatedAt>
-                WHERE id = $<id>
-                RETURNING *
+                WHERE
+                    id = $<id>
+                RETURNING
+                    *
             `, {
-                id: id,
-                name: req.body.name,
-                maxCapacity: req.body.maxCapacity,
-                address: req.body.address,
+                id: massagePlaceId,
+                name: name,
+                maxCapacity: maxCapacity,
+                address: address,
                 updatedAt: new Date()
             })
 
             return {
-                updatedMassagePlace: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassagePlace),
+                updatedMassagePlace: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassagePlaceEntity),
                 statusCode: MassagePlaceDomainGeneralSuccessStatusCode
             }
         })
@@ -803,7 +842,7 @@ export async function updateMassagePlaceById(req, res, next) {
  */
 export async function updateMassagePlaceAdminsById(req, res, next) {
     const reqIdentifier = req.reqIdentifier
-    const baseMessage = `req-${reqIdentifier} - [ massagePlaceController.updateMassagePlaceAdminsById ] called.`
+    const baseMessage = `req - ${reqIdentifier} - [massagePlaceController.updateMassagePlaceAdminsById] called.`
 
     winstonLogger.info(baseMessage)
 
