@@ -135,7 +135,7 @@ export async function signIn(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Sign in flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Sign in flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed sign in."
             response.statusCode = UserDomainFailedSignInErrReqBodyValidation
@@ -146,11 +146,23 @@ export async function signIn(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
+        const {
+            username,
+            password
+        } = req.body
+
         // Main sign in flow.
         const result = await db.tx(async t => {
             // Check for existing user with same credentials.
-            const users = await t.manyOrNone(`SELECT * FROM ms_user WHERE username = $<username>`, { username: req.body.username })
-            if (users.length === 0) {
+            const userEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_user
+                WHERE
+                    username = $<username>
+            `, { username: username })
+            if (userEntity == null) {
                 winstonLogger.info(`${baseMessage} Sign in flow failed because no user record with specified credentials is found.`)
                 response.message = "Failed sign in."
                 return {
@@ -159,10 +171,10 @@ export async function signIn(req, res, next) {
                 }
             }
 
-            const user = users[0]
+            const user = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, userEntity)
 
             // Compare provided password with hashed password.
-            const validPassword = await bcrypt.compare(req.body.password, user.password)
+            const validPassword = await bcrypt.compare(password, user.password)
             if (!validPassword) {
                 winstonLogger.info(`${baseMessage} Sign in flow failed because of failed password comparison.`)
                 response.message = "Failed sign in."
