@@ -43,6 +43,16 @@ export const TblMassagePlaceInsertColumnSet = new ColumnSet([
     table: "ms_massage_place"
 })
 
+export const TblMassagePlaceUpdateColumnSet = new ColumnSet([
+    { name: "id", cnd: true },
+    { name: "name", prop: "name" },
+    { name: "max_capacity", prop: "maxCapacity" },
+    { name: "address", prop: "address" },
+    { name: "updated_at", cast: "timestamp", prop: "updatedAt" },
+], {
+    table: "ms_massage_place"
+})
+
 export const TblMassagePlaceAdminInsertColumnSet = new ColumnSet([
     { name: "admin_user_id", prop: "adminUserId" },
     { name: "massage_place_id", prop: "massagePlaceId" }

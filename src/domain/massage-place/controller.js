@@ -44,6 +44,7 @@ import {
     TblMassagePackageInsertColumnSet,
     TblMassagePlaceAdminInsertColumnSet,
     TblMassagePlaceInsertColumnSet,
+    TblMassagePlaceUpdateColumnSet,
     TblUserAdminInsertColumnSet,
     TblUserInsertColumnSet,
     TblUserUpdateColumnSet
@@ -792,7 +793,7 @@ export async function updateMassagePlaceById(req, res, next) {
                 address: address
             })
             if (existingMassagePlaceEntity != null && existingMassagePlaceEntity.id !== massagePlaceId) {
-                winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the name and address conflicts with other massage place with id of ${existingMassagePlace.id}`)
+                winstonLogger.info(`${baseMessage} Update massage place by id flow failed because the name and address conflicts with other massage place with id of ${existingMassagePlaceEntity.id}`)
                 response.message = "Failed update massage place by id."
                 return {
                     updatedMassagePlace: null,
@@ -801,24 +802,17 @@ export async function updateMassagePlaceById(req, res, next) {
             }
 
             // Update the massage place record.
-            const updatedMassagePlaceEntity = await t.one(`
-                UPDATE ms_massage_place
-                SET
-                    name = $<name>,
-                    max_capacity = $<maxCapacity>,
-                    address = $<address>,
-                    updated_at = $<updatedAt>
-                WHERE
-                    id = $<id>
-                RETURNING
-                    *
-            `, {
+            const { update } = pgp.helpers
+            const updatedMassagePlace = {
                 id: massagePlaceId,
                 name: name,
                 maxCapacity: maxCapacity,
                 address: address,
                 updatedAt: new Date()
-            })
+            }
+            const updateMassagePlaceUpdateCondition = pgp.as.format(" WHERE id = ${id} RETURNING *", updatedMassagePlace)
+            const updateMassagePlaceRecordQuery = update(updatedMassagePlace, TblMassagePlaceUpdateColumnSet) + updateMassagePlaceUpdateCondition
+            const updatedMassagePlaceEntity = await t.one(updateMassagePlaceRecordQuery)
 
             return {
                 updatedMassagePlace: await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, updatedMassagePlaceEntity),

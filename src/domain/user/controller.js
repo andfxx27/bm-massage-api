@@ -425,13 +425,7 @@ export async function approveMemberBanRequest(req, res, next) {
                 id: banRequestId
             }
             const updateMemberBanRequestUpdateCondition = pgp.as.format(" WHERE id = ${id} RETURNING *", updatedMemberBanRequest)
-            const updateMemberBanRequestRecordQuery = update({
-                ownerUserId: ownerUserId,
-                approvalStatus: banApprovalStatus,
-                banLiftedAt: banLiftedAt,
-                updatedAt: currentDate,
-                id: banRequestId
-            }, TblMemberBanUpdateColumnSet) + updateMemberBanRequestUpdateCondition
+            const updateMemberBanRequestRecordQuery = update(updatedMemberBanRequest, TblMemberBanUpdateColumnSet) + updateMemberBanRequestUpdateCondition
             const updatedMemberBanRequestEntity = await t.one(updateMemberBanRequestRecordQuery)
 
             // Update ban status in user record.

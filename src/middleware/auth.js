@@ -81,25 +81,49 @@ export function isRoleMiddleware(roles) {
             result: null
         }
 
+        const {
+            id,
+            role
+        } = req.decodedPayload
+
         const result = await db.tx(async t => {
             // Get user record.
-            const users = await t.manyOrNone(`SELECT * FROM ms_user WHERE id = $<id>`, { id: req.decodedPayload.id })
-            if (users.length === 0) {
-                winstonLogger.info(`${baseMessage} Authorization failed, no user with id ${req.decodedPayload.id} found.`)
+            const userEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_user
+                WHERE
+                    id = $<id>
+            `, { id: id })
+            if (userEntity == null) {
+                winstonLogger.info(`${baseMessage} Authorization failed, no user with id ${id} found.`)
                 return {
                     statusCode: MiddlewareDomainGeneralSuccessStatusCode
                 }
             }
 
             // Check for ban status.
-            const memberBan = await t.oneOrNone("SELECT * FROM ms_member_ban WHERE member_user_id = $<id> AND approval_status = 'BANNED' ORDER BY created_at DESC LIMIT 1", { id: req.decodedPayload.id })
-            if (memberBan != null) {
-                const convertedMemberBan = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBan)
+            const memberBanEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_member_ban
+                WHERE
+                    member_user_id = $<id>
+                    AND approval_status = 'BANNED'
+                ORDER BY
+                    created_at DESC
+                LIMIT
+                    1
+            `, { id: req.decodedPayload.id })
+            if (memberBanEntity != null) {
+                const memberBan = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, memberBanEntity)
                 const currentDate = new Date()
                 const currentDateUnix = currentDate.getTime()
-                const banLiftedDateUnix = convertedMemberBan.banLiftedAt.getTime()
+                const banLiftedDateUnix = memberBan.banLiftedAt.getTime()
                 if (banLiftedDateUnix > currentDateUnix) {
-                    winstonLogger.info(`${baseMessage} Authorization failed, user with id ${req.decodedPayload.id} is currently banned and will be lifted at ${convertedMemberBan.banLiftedAt}.`)
+                    winstonLogger.info(`${baseMessage} Authorization failed, user with id ${id} is currently banned and will be lifted at ${memberBan.banLiftedAt}.`)
                     return {
                         statusCode: MiddlewareDomainErrUserBanned
                     }
@@ -116,8 +140,8 @@ export function isRoleMiddleware(roles) {
         }
 
         // Validate user role.
-        if (roles.filter(r => r === req.decodedPayload.role).length === 0) {
-            winstonLogger.info(`${baseMessage} Authorization failed, access from user id ${req.decodedPayload.id} is prohibited because the role is not one of ${roles}.`)
+        if (roles.filter(r => r === role).length === 0) {
+            winstonLogger.info(`${baseMessage} Authorization failed, access from user id ${id} is prohibited because the role is not one of ${roles}.`)
             return res.status(httpStatusCodes.UNAUTHORIZED).json(response)
         }
 
