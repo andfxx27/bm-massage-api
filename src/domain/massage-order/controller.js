@@ -551,26 +551,30 @@ export async function getMemberOrdersCountAndBanStatus(req, res, next) {
         const result = await db.tx(async t => {
             const memberOrdersCountAndBanStatus = await t.any(`
                 SELECT
+                    mu.id AS member_user_id,
                     mu.username AS member_username,
                     mu.email AS member_email,
                     count(mmo.order_status) FILTER (
-                            WHERE
-                                    mmo.order_status = 'EXPIRED'
+                        WHERE
+                            mmo.order_status = 'EXPIRED'
                     )::int AS expired_order_count,
                     count(mmo.order_status) FILTER (
-                            WHERE
-                                    mmo.order_status = 'COMPLETED'
+                        WHERE
+                            mmo.order_status = 'COMPLETED'
                     )::int AS completed_order_count,
                     mu.ban_status AS member_ban_status,
                     mu.created_at AS member_created_at
                 FROM
                     ms_user mu
-                    JOIN ms_massage_order mmo ON mmo.member_user_id = mu.id
+                    LEFT JOIN ms_massage_order mmo ON mmo.member_user_id = mu.id
+                WHERE 
+                    mu.role = 'MEMBER'
                 GROUP BY
-                    member_username,
-                    member_email,
+                    mu.id,
+                    mu.username,
+                    mu.email,
                     mmo.order_status,
-                    member_ban_status,
+                    mu.ban_status,
                     mu.created_at
                 ORDER BY
                     mu.created_at DESC

@@ -30,8 +30,9 @@ import {
 import {
     db,
     pgp,
-    TblMemberBanColumnSet,
-    TblUserInsertColumnSet
+    TblMemberBanInsertColumnSet,
+    TblUserInsertColumnSet,
+    TblUserUpdateBanStatusColumnSet
 } from "#root/src/config/database.js"
 import { winstonLogger } from "#root/src/config/logger.js"
 
@@ -228,7 +229,7 @@ export async function requestMemberBanApproval(req, res, next) {
         // Validate request body.
         const errors = validationResult(req)
         if (!errors.isEmpty()) {
-            winstonLogger.info(baseMessage + " Request member ban approval flow failed because an error occurred during request body validation.")
+            winstonLogger.info(`${baseMessage} Request member ban approval flow failed because an error occurred during request body validation.`)
 
             response.message = "Failed request member ban approval."
             response.statusCode = UserDomainFailedRequestMemberBanApprovalErrReqBodyValidation
@@ -239,18 +240,30 @@ export async function requestMemberBanApproval(req, res, next) {
             return res.status(httpStatusCodes.BAD_REQUEST).json(response)
         }
 
+        const { memberUserId } = req.body
+        const { id: adminUserId } = req.decodedPayload
+
         // Main request member ban approval flow.
         const result = await db.tx(async t => {
             // Check if provided member user id is valid.
-            const existingMember = await t.oneOrNone("SELECT * FROM ms_user WHERE id = $<memberUserId>", { memberUserId: req.body.memberUserId })
-            if (existingMember == null) {
-                winstonLogger.info(`${baseMessage} Request member ban approval flow failed because the user is not found.`)
+            const existingMemberEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_user
+                WHERE
+                    id = $<memberUserId>
+            `, { memberUserId: memberUserId })
+            if (existingMemberEntity == null) {
+                winstonLogger.info(`${baseMessage} Request member ban approval flow failed because user with id of ${memberUserId} is not found.`)
                 response.message = "Failed request member ban approval."
                 return {
                     requestedMemberBanApproval: null,
                     statusCode: UserDomainFailedRequestMemberBanApprovalErrUserNotFound
                 }
             }
+
+            const existingMember = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, existingMemberEntity)
             if (existingMember.role === UserDomainRoleOwner || existingMember.role === UserDomainRoleAdmin) {
                 winstonLogger.info(`${baseMessage} Request member ban approval flow failed because the user is of role ADMIN or OWNER.`)
                 response.message = "Failed request member ban approval."
@@ -260,51 +273,48 @@ export async function requestMemberBanApproval(req, res, next) {
                 }
             }
 
-            /**
-             * TODO Find better ways to check for existing ban request.
-             * As it stands now, if an owner forgot to update the ban request, the process for checking existing ban request will eventually be longer because of many PENDING ban request.
-             */
             // Check if there is ongoing ban request for the user.
-            const existingBanRequest = await t.manyOrNone("SELECT * FROM ms_member_ban WHERE member_user_id = $<memberUserId>", { memberUserId: req.body.memberUserId })
-            if (existingBanRequest != null) {
-                const convertedExistingBanRequest = await arrayObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, existingBanRequest)
-
-                // Check for ban request which already passed its own ban lift time, since we only update it manually.
-                const currentDate = new Date()
-                const currentDateUnix = currentDate.getTime()
-                let liftedBanRequestCount = 0
-                convertedExistingBanRequest.forEach((request) => {
-                    const banLiftedDateUnix = request.banLiftedAt.getTime()
-                    if (banLiftedDateUnix < currentDateUnix) {
-                        liftedBanRequestCount++
-                    }
-                })
-
-                if (liftedBanRequestCount !== convertedExistingBanRequest.length) {
-                    winstonLogger.info(`${baseMessage} Request member ban approval flow failed because there is existing ban request for the user.`)
-                    response.message = "Failed request member ban approval."
-                    return {
-                        requestedMemberBanApproval: null,
-                        statusCode: UserDomainFailedRequestMemberBanApprovalErrBanRequestAlreadyExists
-                    }
+            const existingBanRequestEntity = await t.oneOrNone(`
+                SELECT
+                    *
+                FROM
+                    ms_member_ban
+                WHERE
+                    member_user_id = $<memberUserId>
+                    AND approval_status = $<approvalStatus>
+            `, {
+                memberUserId: memberUserId,
+                approvalStatus: UserDomainBanApprovalStatusPending
+            })
+            if (existingBanRequestEntity != null) {
+                winstonLogger.info(`${baseMessage} Request member ban approval flow failed because there is existing ban request for the user.`)
+                response.message = "Failed request member ban approval."
+                return {
+                    requestedMemberBanApproval: null,
+                    statusCode: UserDomainFailedRequestMemberBanApprovalErrBanRequestAlreadyExists
                 }
             }
 
             // Create member ban request record.
-            req.body.adminUserId = req.decodedPayload.id
+            req.body.adminUserId = adminUserId
 
             const newMemberBanRequest = { ...req.body }
 
-            const { insert } = pgp.helpers
-            const createMemberBanRequestRecordQuery = insert(newMemberBanRequest, TblMemberBanColumnSet) + " RETURNING *"
-            const requestedMemberBanApproval = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.one(createMemberBanRequestRecordQuery))
+            const {
+                insert,
+                update
+            } = pgp.helpers
+            const insertMemberBanRequestRecordQuery = insert(newMemberBanRequest, TblMemberBanInsertColumnSet) + " RETURNING *"
+            const requestedMemberBanApproval = await singleObjectSnakeCaseToCamelCasePropsConverter(reqIdentifier, await t.one(insertMemberBanRequestRecordQuery))
 
             // Update member ban status on user record.
-            await t.none(`UPDATE ms_user SET ban_status = $<banStatus>, updated_at = $<updatedAt> WHERE id = $<memberUserId>`, {
+            const updatedUserBanStatus = {
                 banStatus: UserDomainBanApprovalStatusPending,
-                memberUserId: req.body.memberUserId,
+                memberUserId: memberUserId,
                 updatedAt: new Date()
-            })
+            }
+            const updateUserRecordBanStatusQuery = update(updatedUserBanStatus, TblUserUpdateBanStatusColumnSet)
+            await t.none(updateUserRecordBanStatusQuery)
 
             return {
                 requestedMemberBanApproval: requestedMemberBanApproval,
@@ -329,7 +339,7 @@ export async function requestMemberBanApproval(req, res, next) {
  */
 export async function approveMemberBanRequest(req, res, next) {
     const reqIdentifier = req.reqIdentifier
-    const baseMessage = `req-${reqIdentifier} - [ userController.approveMemberBanRequest ] called.`
+    const baseMessage = `req - ${reqIdentifier} -[userController.approveMemberBanRequest] called.`
 
     winstonLogger.info(baseMessage)
 
@@ -400,14 +410,14 @@ export async function approveMemberBanRequest(req, res, next) {
             // Update ban approval status in member ban record.
             const updatedMemberBanRequest = await t.one(`
                 UPDATE ms_member_ban
-                SET
-                    owner_user_id = $<ownerUserId>,
-                    approval_status = $<banApprovalStatus>,
-                    ban_lifted_at = $<banLiftedAt>,
-                    updated_at = $<updatedAt>
-                WHERE id = $<banRequestId>
-                RETURNING *
-            `, {
+            SET
+            owner_user_id = $ < ownerUserId >,
+                approval_status = $ < banApprovalStatus >,
+                ban_lifted_at = $ < banLiftedAt >,
+                updated_at = $ < updatedAt >
+                WHERE id = $ < banRequestId >
+                    RETURNING *
+                    `, {
                 ownerUserId: req.decodedPayload.id,
                 banApprovalStatus: banApprovalStatus,
                 banLiftedAt: banLiftedAt,
@@ -418,11 +428,11 @@ export async function approveMemberBanRequest(req, res, next) {
             // Update ban status in user record.
             await t.none(`
                 UPDATE ms_user
-                SET
-                    ban_status = $<banStatus>,
-                    updated_at = $<updatedAt>
-                WHERE id = $<memberUserId>
-            `, {
+            SET
+            ban_status = $ < banStatus >,
+                updated_at = $ < updatedAt >
+                WHERE id = $ < memberUserId >
+                    `, {
                 banStatus: banStatus,
                 updatedAt: currentDate,
                 memberUserId: req.body.memberUserId
@@ -451,7 +461,7 @@ export async function approveMemberBanRequest(req, res, next) {
  */
 export async function getMemberBanApprovalRequests(req, res, next) {
     const reqIdentifier = req.reqIdentifier
-    const baseMessage = `req-${reqIdentifier} - [ userController.getMemberBanApprovalRequests ] called.`
+    const baseMessage = `req - ${reqIdentifier} -[userController.getMemberBanApprovalRequests] called.`
 
     winstonLogger.info(baseMessage)
 
@@ -472,17 +482,17 @@ export async function getMemberBanApprovalRequests(req, res, next) {
         const result = await db.tx(async t => {
             // Get member ban approval request record.
             const memberBanApprovalRequestsEntity = await t.manyOrNone(`
-                SELECT
-                    *
+            SELECT
+                *
                 FROM
-                    ms_member_ban
-                WHERE
-                    approval_status = 'PENDING'
-                LIMIT
-                    $<limit>
+            ms_member_ban
+            WHERE
+            approval_status = 'PENDING'
+            LIMIT
+            $ < limit >
                 OFFSET
-                    $<offset>
-            `, {
+            $ < offset >
+                `, {
                 limit: limit,
                 offset: (page - 1) * limit
             })

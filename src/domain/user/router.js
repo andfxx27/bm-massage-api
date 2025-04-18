@@ -29,7 +29,12 @@ router.post(
     body("password", `Field "password" must be a strong password with minimum length of 8 chars.`).isStrongPassword({ minLength: 8 }),
     signUp
 )
-router.post("/sign-in", signIn)
+router.post(
+    "/sign-in",
+    body("username", `Field "username" must not be empty.`).notEmpty(),
+    body("password", `Field "password" must not be empty.`).notEmpty(),
+    signIn
+)
 router.post(
     "/member-ban",
     body("memberUserId", `Field "memberUserId" must be a valid uuid value.`).notEmpty().isUUID("4"),
