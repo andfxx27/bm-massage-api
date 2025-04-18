@@ -99,6 +99,16 @@ export const TblMemberBanInsertColumnSet = new ColumnSet([
     table: "ms_member_ban"
 })
 
+export const TblMemberBanUpdateColumnSet = new ColumnSet([
+    { name: "id", cnd: true },
+    { name: "owner_user_id", prop: "ownerUserId" },
+    { name: "approval_status", prop: "approvalStatus" },
+    { name: "ban_lifted_at", cast: "timestamp", prop: "banLiftedAt" },
+    { name: "updated_at", cast: "timestamp", prop: "updatedAt" }
+], {
+    table: "ms_member_ban"
+})
+
 const dbUser = process.env.DATABASE_USER
 const dbPass = process.env.DATABASE_PASS
 const dbHost = process.env.DATABASE_HOST

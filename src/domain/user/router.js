@@ -46,7 +46,6 @@ router.post(
 router.patch(
     "/member-ban",
     body("banRequestId", `Field "banRequestId" must be a valid uuid value.`).notEmpty().isUUID("4"),
-    body("memberUserId", `Field "memberUserId" must be a valid uuid value.`).notEmpty().isUUID("4"),
     body("banApprovalStatus", `Field "banApprovalStatus" must be either "BANNED" or "REVOKED".`).notEmpty().isIn(["BANNED", "REVOKED"]),
     isAuthorizedMiddleware,
     isRoleMiddleware([UserDomainRoleOwner]),

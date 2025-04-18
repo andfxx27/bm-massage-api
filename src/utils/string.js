@@ -6,7 +6,7 @@ import { winstonLogger } from "#root/src/config/logger.js"
  * @param {Object[]} objectArray Object array to be converted.
  */
 export async function arrayObjectSnakeCaseToCamelCasePropsConverter(identifier, objectArray) {
-    const baseMessage = `req-${identifier} - [ stringUtils.arrayObjectSnakeCaseToCamelCasePropsConverter] called.`
+    const baseMessage = `req-${identifier} - [ stringUtils.arrayObjectSnakeCaseToCamelCasePropsConverter ] called.`
 
     winstonLogger.info(baseMessage)
 
@@ -34,7 +34,7 @@ export async function arrayObjectSnakeCaseToCamelCasePropsConverter(identifier, 
  * @param {Object} object Object to be converted.
  */
 export async function singleObjectSnakeCaseToCamelCasePropsConverter(identifier, object) {
-    const baseMessage = `req-${identifier} - [ stringUtils.singleObjectSnakeCaseToCamelCasePropsConverter] called.`
+    const baseMessage = `req-${identifier} - [ stringUtils.singleObjectSnakeCaseToCamelCasePropsConverter ] called.`
 
     winstonLogger.info(baseMessage)
 

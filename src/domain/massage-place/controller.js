@@ -787,7 +787,7 @@ export async function updateMassagePlaceById(req, res, next) {
                 WHERE
                     name = $<name>
                     AND address = $<address>
-                    `, {
+            `, {
                 name: name,
                 address: address
             })
